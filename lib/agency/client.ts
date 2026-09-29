@@ -20,8 +20,8 @@ export async function callAgency<T>(path: string, init?: RequestInit): Promise<T
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
     const method = init?.method?.toUpperCase() ?? "GET";
-    const cacheAnnouncements = method === "GET"
-      && requestUrl.pathname === "/api/v1/announcements";
+    const cachedReadPaths = new Set(["/api/v1/announcements", "/api/v1/agency", "/api/v1/billing"]);
+    const isCachedRead = method === "GET" && cachedReadPaths.has(requestUrl.pathname);
     try {
       const response = await fetch(requestUrl, {
         ...init,
@@ -33,7 +33,7 @@ export async function callAgency<T>(path: string, init?: RequestInit): Promise<T
           "X-Site-Key": siteKey,
           Authorization: `Bearer ${siteSecret}`,
         },
-        ...(cacheAnnouncements ? { next: { revalidate: 300 } } : { cache: "no-store" }),
+        ...(isCachedRead ? { next: { revalidate: 300 } } : { cache: "no-store" }),
       });
       if (!response.ok) return null;
       return await response.json() as T;
