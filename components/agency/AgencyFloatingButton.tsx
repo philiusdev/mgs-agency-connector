@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AgencyPanel } from "./AgencyPanel";
+import { composerLibelleAccessibleBouton } from "./agency-commun";
 import type { AgencySpace } from "@/lib/agency/types";
 
 /**
@@ -227,7 +228,7 @@ export function AgencyFloatingButton({
         className={`agency-bouton-flottant${marque ? " agency-bouton-flottant--marque" : ""}`}
         aria-expanded={ouvert}
         aria-controls={identifiantPanneau}
-        aria-label={bouton.libelle_accessible}
+        aria-label={composerLibelleAccessibleBouton(bouton.libelle, bouton.libelle_accessible)}
         onClick={ouvrir}
       >
         <span className="agency-bouton-flottant-icone" aria-hidden="true">

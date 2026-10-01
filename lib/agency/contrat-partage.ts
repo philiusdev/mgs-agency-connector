@@ -514,6 +514,73 @@ export type LigneAbonnement = {
   updated_at: string;
 };
 
+/** Forme publique d'un forfait pour le catalogue des sites clients. */
+export type ForfaitFacturationPublic = Pick<
+  LignePlan,
+  "id" | "code" | "name" | "description" | "price_cents" | "currency" | "billing_interval" | "features" | "trial_days"
+>;
+
+/** Facture impayee renvoyee au site rattache a son tenant. */
+export type FactureImpayeePublique = {
+  id: string;
+  number: string;
+  status: "open" | "uncollectible";
+  amount_cents: number;
+  currency: string;
+  issued_at: string;
+  due_at: string | null;
+  period_start: string | null;
+  period_end: string | null;
+};
+
+/** Abonnement public du seul tenant associe a la cle du site. */
+export type AbonnementFacturationPublic = {
+  id: string;
+  status: CodeStatutAbonnement;
+  provider: string;
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  plan: ForfaitFacturationPublic | null;
+};
+
+/** Reponse de `GET /api/v1/billing`. */
+export type ReponseFacturationPublique = {
+  site_name: string;
+  subscription: AbonnementFacturationPublic | null;
+  plans: ForfaitFacturationPublic[];
+  plans_truncated: boolean;
+  unpaid_invoices: FactureImpayeePublique[];
+  domain: string | null;
+  portal_url: string | null;
+  can_pay_online: boolean;
+  payment_endpoint: "/api/v1/billing/paiement";
+  billing_available: boolean;
+  billing_message: string;
+};
+
+/** Facture emise a la premiere souscription payante, ou aucune pour un essai/gratuit. */
+export type FactureSouscriptionPublique = FactureImpayeePublique;
+
+/** Reponse de `POST /api/v1/billing/abonnement`. */
+export type ReponseSouscriptionPublique = {
+  ok: true;
+  created: boolean;
+  subscription: AbonnementFacturationPublic;
+  invoice: FactureSouscriptionPublique | null;
+  payment_required: boolean;
+  can_pay_online: boolean;
+  billing_message: string;
+};
+
+/** Reponse de `POST /api/v1/billing/paiement` apres la creation de session. */
+export type ReponsePaiementPublic = {
+  pay_url: string | null;
+  can_pay_online: boolean;
+  invoice?: string;
+  billing_message: string;
+};
+
 /**
  * Un abonnement lu avec sa formule, tel que `COLONNES_ABONNEMENT_ET_PLAN` le
  * rend.
@@ -1411,8 +1478,17 @@ export function lireBoutonFlottant(
   };
 }
 
-/** Caracteristiques d'une formule, en ne gardant que les chaines. Repli : liste vide. */
-function caracteristiques(plan: LignePlan | null | undefined): string[] {
+/**
+ * Caracteristiques d'une formule, en ne gardant que les chaines. Repli : liste vide.
+ *
+ * `features` est un `jsonb` : rien n'y garantit un tableau de textes, et une
+ * formule saisie a la main peut contenir un nombre, un objet ou une chaine vide.
+ * Lire ce champ sans passer par ici, c'est afficher `[object Object]` ou une
+ * pastille vide a l'ecran. La fonction est donc exportee : la console
+ * d'administration lit les caracteristiques d'une formule par cette porte, et
+ * les sites clients Presentation par la meme.
+ */
+export function lireCaracteristiques(plan: LignePlan | null | undefined): string[] {
   if (!Array.isArray(plan?.features)) return [];
   return plan.features
     .filter((ligne): ligne is string => typeof ligne === "string")
@@ -1709,7 +1785,7 @@ export function presenterAbonnement(
     formule: texte(plan?.name, 120) || LIBELLE_FORMULE_INCONNUE,
     formule_code: texte(plan?.code, 64) || null,
     tarif_libelle: formaterTarif(plan),
-    caracteristiques: caracteristiques(plan),
+    caracteristiques: lireCaracteristiques(plan),
     periode_debut: debut === null ? null : debut.toISOString(),
     periode_fin: fin === null ? null : fin.toISOString(),
     periode_libelle: formaterPeriode(debut, fin),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   LIBELLE_OBJET_INCONNU,
   MESSAGE_DEMANDE_ENVOYEE,
@@ -71,6 +71,16 @@ export type FormulaireNouvelleDemandeProps = {
   cheminRevalidation?: string;
   requesterName?: string;
   requesterEmail?: string;
+  /**
+   * Préfixe d'identifiant du panneau.
+   *
+   * Le formulaire ne l'utilise PAS : ses identifiants viennent de `useId`, donc
+   * uniques par montage. La prop existe pour que `AgencyPanel` passe le même
+   * objet de props aux deux sections sans avoir à connaître ce que chacune en
+   * fait — et pour que le typage du panneau reste stable si le formulaire
+   * devient, lui aussi, instanciable plusieurs fois.
+   */
+  suffixe?: string;
 };
 
 /** Bornes du serveur, reproduites ici. Toute divergence se voit au premier envoi. */
@@ -111,6 +121,9 @@ export function FormulaireNouvelleDemande({
   const [etat, setEtat] = useState<EtatEnvoi>("repos");
   const [erreur, setErreur] = useState("");
   const [champs, setChamps] = useState<string[]>([]);
+  // Le message À CHAQUE champ en erreur, pas un message unique : le résumé
+  // d'erreurs et le texte sous le champ doivent dire la même chose.
+  const [messages, setMessages] = useState<Record<string, string>>({});
   const [confirmation, setConfirmation] = useState<{ message: string; reference: string } | null>(null);
   // Le champ qui a échoué reçoit le focus après une erreur : sans cela, le
   // commerçant voit un bandeau rouge et ne sait pas lequel des six champs
@@ -124,10 +137,33 @@ export function FormulaireNouvelleDemande({
     [],
   );
 
+  // Les identifiants du formulaire ne sont PAS des constantes en dur.
+  //
+  // Le panneau peut être monté plusieurs fois sur une même page — un bouton
+  // flottant, plus le même panneau rendu dans un autre coin — et des `id` en dur
+  // feraient pointer le `htmlFor` d'une étiquette vers le champ d'une AUTRE
+  // occurrence. Le clic sur le label n'aurait plus d'effet, le focus irait au
+  // mauvais endroit, et un lecteur d'écran annoncerait l'étiquette d'un champ
+  // en devant un autre. `useId` donne une racine unique par montage.
+  //
+  // Le `replace` n'est pas cosmétique : `useId` rend des `:` dans sa valeur, et
+  // un `id` contenant `:` casse les sélecteurs CSS — dont ceux qu'un site client
+  // peut écrire sur ses propres styles. Les identifiants restent lisibles.
+  const racine = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const cid = (nom: string) => `agency-${nom}-${racine}`;
+
+  // Le focus part sur le RÉSUMÉ, pas sur le premier champ.
+  //
+  // Un focus direct sur le premier champ semble plus efficace, et c'est faux : le
+  // commerçant ne sait pas encore qu'il y a un problème, et son premier réflexe
+  // est de taper au hasard. Le résumé annonce ce qui ne va pas et propose un lien
+  // par champ ; il se lit en une phrase, puis un lien mène exactement au champ.
+  // C'est ce que demande le critère 3.3.1, et c'est aussi ce qui fonctionne à la
+  // souris comme au clavier.
+  const resumeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (etat !== "erreur" || champs.length === 0) return;
-    const cible = champs.map((nom) => champsRef.current[nom]).find(Boolean);
-    cible?.focus();
+    resumeRef.current?.focus();
   }, [etat, champs]);
 
   // Seules les prestations réellement proposables entrent dans la liste : un
@@ -169,6 +205,7 @@ export function FormulaireNouvelleDemande({
       evenement.preventDefault();
       const valeurs = valider({ serviceId, nom, email, telephone, objet, description });
       setChamps(valeurs.manquants);
+      setMessages(valeurs.messages);
       if (valeurs.erreur !== "" || valeurs.manquants.length > 0) {
         setEtat("erreur");
         setErreur(
@@ -182,6 +219,7 @@ export function FormulaireNouvelleDemande({
       setEtat("envoi");
       setErreur("");
       setChamps([]);
+      setMessages({});
 
       try {
         const reponse = await fetch(routeDemande, {
@@ -205,12 +243,22 @@ export function FormulaireNouvelleDemande({
         if (!reponse.ok) {
           const erreurServeur = corps as ReponseErreur | null;
           setEtat("erreur");
-          setErreur(
+          const messageServeur =
             typeof erreurServeur?.error === "string" && erreurServeur.error !== ""
               ? erreurServeur.error
-              : "Votre demande n’a pas pu être envoyée. Réessayez dans un instant.",
+              : "Votre demande n’a pas pu être envoyée. Réessayez dans un instant.";
+          setErreur(messageServeur);
+          // Le serveur ne renvoie qu'UN texte et la liste des champs fautifs. Ce
+          // texte est reporté sous chacun d'eux : c'est la seule information
+          // disponible, et la répéter est plus utile qu'un champ marqué en erreur
+          // sans aucune explication à côté.
+          const champsServeur = Array.isArray(erreurServeur?.champs)
+            ? erreurServeur.champs.filter((c): c is string => typeof c === "string")
+            : [];
+          setChamps(champsServeur);
+          setMessages(
+            Object.fromEntries(champsServeur.map((champ) => [champ, messageServeur])),
           );
-          setChamps(Array.isArray(erreurServeur?.champs) ? erreurServeur.champs.filter((c) => typeof c === "string") : []);
           return;
         }
 
@@ -251,8 +299,8 @@ export function FormulaireNouvelleDemande({
     // envoyer. Le dire vaut mieux qu'un formulaire désactivé sans raison : le
     // commerçant croirait à un bug du site.
     return (
-      <section className="agency-section" aria-labelledby="agency-titre-demande">
-        <h2 className="agency-section-titre" id="agency-titre-demande">
+      <section className="agency-section" aria-labelledby={cid("titre-demande")}>
+        <h2 className="agency-section-titre" id={cid("titre-demande")}>
           Nouvelle demande
         </h2>
         <p className="agency-section-intro">
@@ -264,10 +312,23 @@ export function FormulaireNouvelleDemande({
   }
 
   const enCours = etat === "envoi";
+  const fautifs = champs.filter((nom) => messages[nom] !== undefined);
+
+  // Le `describedby` d'un champ : son aide, puis son message d'erreur s'il y en a
+  // un. L'ordre compte — le lecteur d'écran lit d'abord l'usage du champ, puis ce
+  // qui ne va pas. Un seul identifiant ne suffirait pas : le message d'erreur
+  // remplacerait alors l'aide, et le champ perdrait sa mode d'emploi au moment
+  // précis où l'utilisateur en a le plus besoin.
+  const decrire = (nom: string, aide?: string) => {
+    const ids = [];
+    if (aide !== undefined) ids.push(aide);
+    if (messages[nom] !== undefined) ids.push(cid(`erreur-${nom}`));
+    return ids.length === 0 ? undefined : ids.join(" ");
+  };
 
   return (
-    <section className="agency-section" aria-labelledby="agency-titre-demande">
-      <h2 className="agency-section-titre" id="agency-titre-demande">
+    <section className="agency-section" aria-labelledby={cid("titre-demande")}>
+      <h2 className="agency-section-titre" id={cid("titre-demande")}>
         Nouvelle demande
       </h2>
       <p className="agency-section-intro">
@@ -284,25 +345,77 @@ export function FormulaireNouvelleDemande({
         </p>
       )}
 
-      {erreur !== "" && (
+      {/*
+        Le bandeau ne s'affiche que pour une erreur SANS champ fautif : réseau
+        coupé, 503, 500. Dès qu'un ou plusieurs champs sont en cause, c'est le
+        résumé qui parle — afficher les deux répéterait le même texte deux fois,
+        et deux fois la même annonce est le plus sûr moyen de faire rater une
+        alerte à quelqu'un qui l'attend.
+      */}
+      {erreur !== "" && fautifs.length === 0 && (
         <p className="agency-retour agency-retour--erreur" role="alert">
           {erreur}
         </p>
       )}
 
+      {/*
+        Le RÉSUMÉ D'ERREURS. `role="alert"` le fait annoncer dès son apparition,
+        et `tabIndex={-1}` permet de le recevoir au focus : sans cela le
+        changement de focus est muet, et une personne qui navigue au clavier
+        verrait le focus disparaître du formulaire sans savoir pourquoi.
+
+        `role="alert"` ET le focus sont volontairement cumulés : l'alerte prévient
+        les lecteurs d'écran qui écoutent en continu, le focus prévient ceux qui
+        naviguent au clavier et n'écoutent rien. Aucun des deux ne suffit seul.
+      */}
+      {fautifs.length > 0 && (
+        <div
+          ref={resumeRef}
+          className="agency-retour agency-retour--erreur"
+          role="alert"
+          tabIndex={-1}
+        >
+          <p className="agency-retour-titre">
+            {fautifs.length === 1
+              ? "Un champ doit être corrigé avant l’envoi."
+              : `${fautifs.length} champs doivent être corrigés avant l’envoi.`}
+          </p>
+          <ul className="agency-resume-erreurs">
+            {fautifs.map((nom) => (
+              <li key={nom}>
+                <a
+                  className="agency-resume-lien"
+                  href={`#${cid(nom)}`}
+                  onClick={(e) => {
+                    // Un lien `#id` ferait défiler la page vers le haut du champ ;
+                    // le focus, lui, va au bon endroit. On.preventDefault() et on
+                    // déplace le focus nous-mêmes, pour que les deux navigation —
+                    // visuelle et focus — partent du même endroit.
+                    e.preventDefault();
+                    champsRef.current[nom]?.focus();
+                  }}
+                >
+                  {NOMS_LISIBLES[nom] ?? nom} : {messages[nom]}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <form className="agency-formulaire" onSubmit={envoyer} noValidate>
         <div className="agency-champ">
-          <label className="agency-etiquette" htmlFor="agency-demande-prestation">
+          <label className="agency-etiquette" htmlFor={cid("service_id")}>
             Prestation
           </label>
           <select
             className="agency-saisie"
-            id="agency-demande-prestation"
+            id={cid("service_id")}
             name="service_id"
             value={serviceId}
             required
             aria-invalid={champs.includes("service_id") || undefined}
-            aria-describedby="agency-aide-prestation"
+            aria-describedby={decrire("service_id", cid("aide-service_id"))}
             ref={attacher("service_id")}
             onChange={(e) => {
               setServiceId(e.target.value);
@@ -318,18 +431,19 @@ export function FormulaireNouvelleDemande({
               </option>
             ))}
           </select>
-          <p className="agency-aide" id="agency-aide-prestation">
+          <p className="agency-aide" id={cid("aide-service_id")}>
             Seules les prestations publiées par l’agence peuvent être demandées.
           </p>
+          <MessageChamp id={cid("erreur-service_id")} texte={messages.service_id} />
         </div>
 
         <div className="agency-champ">
-          <label className="agency-etiquette" htmlFor="agency-demande-nom">
+          <label className="agency-etiquette" htmlFor={cid("requester_name")}>
             Votre nom
           </label>
           <input
             className="agency-saisie"
-            id="agency-demande-nom"
+            id={cid("requester_name")}
             name="requester_name"
             type="text"
             autoComplete="name"
@@ -338,6 +452,7 @@ export function FormulaireNouvelleDemande({
             minLength={BORNES.nom.min}
             maxLength={BORNES.nom.max}
             aria-invalid={champs.includes("requester_name") || undefined}
+            aria-describedby={decrire("requester_name")}
             ref={attacher("requester_name")}
             onChange={(e) => {
               setNom(e.target.value);
@@ -345,15 +460,16 @@ export function FormulaireNouvelleDemande({
               setErreur("");
             }}
           />
+          <MessageChamp id={cid("erreur-requester_name")} texte={messages.requester_name} />
         </div>
 
         <div className="agency-champ">
-          <label className="agency-etiquette" htmlFor="agency-demande-email">
+          <label className="agency-etiquette" htmlFor={cid("requester_email")}>
             Votre email
           </label>
           <input
             className="agency-saisie"
-            id="agency-demande-email"
+            id={cid("requester_email")}
             name="requester_email"
             type="email"
             autoComplete="email"
@@ -361,6 +477,7 @@ export function FormulaireNouvelleDemande({
             required
             maxLength={BORNES.email.max}
             aria-invalid={champs.includes("requester_email") || undefined}
+            aria-describedby={decrire("requester_email")}
             ref={attacher("requester_email")}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -368,16 +485,17 @@ export function FormulaireNouvelleDemande({
               setErreur("");
             }}
           />
+          <MessageChamp id={cid("erreur-requester_email")} texte={messages.requester_email} />
         </div>
 
         <div className="agency-champ">
-          <label className="agency-etiquette" htmlFor="agency-demande-telephone">
+          <label className="agency-etiquette" htmlFor={cid("requester_phone")}>
             Téléphone
             <Invisible> (facultatif)</Invisible>
           </label>
           <input
             className="agency-saisie"
-            id="agency-demande-telephone"
+            id={cid("requester_phone")}
             name="requester_phone"
             type="tel"
             inputMode="tel"
@@ -386,7 +504,7 @@ export function FormulaireNouvelleDemande({
             maxLength={BORNES.telephone.max}
             placeholder="+226 70 12 34 56"
             aria-invalid={champs.includes("requester_phone") || undefined}
-            aria-describedby="agency-aide-telephone"
+            aria-describedby={decrire("requester_phone", cid("aide-requester_phone"))}
             ref={attacher("requester_phone")}
             onChange={(e) => {
               setTelephone(e.target.value);
@@ -394,18 +512,19 @@ export function FormulaireNouvelleDemande({
               setErreur("");
             }}
           />
-          <p className="agency-aide" id="agency-aide-telephone">
+          <p className="agency-aide" id={cid("aide-requester_phone")}>
             Facultatif. Format burkinabè : +226 70 12 34 56.
           </p>
+          <MessageChamp id={cid("erreur-requester_phone")} texte={messages.requester_phone} />
         </div>
 
         <div className="agency-champ">
-          <label className="agency-etiquette" htmlFor="agency-demande-objet">
+          <label className="agency-etiquette" htmlFor={cid("subject")}>
             L’objet
           </label>
           <input
             className="agency-saisie"
-            id="agency-demande-objet"
+            id={cid("subject")}
             name="subject"
             type="text"
             value={objet}
@@ -413,6 +532,7 @@ export function FormulaireNouvelleDemande({
             minLength={BORNES.objet.min}
             maxLength={BORNES.objet.max}
             aria-invalid={champs.includes("subject") || undefined}
+            aria-describedby={decrire("subject")}
             ref={attacher("subject")}
             onChange={(e) => {
               setObjet(e.target.value);
@@ -420,15 +540,16 @@ export function FormulaireNouvelleDemande({
               setErreur("");
             }}
           />
+          <MessageChamp id={cid("erreur-subject")} texte={messages.subject} />
         </div>
 
         <div className="agency-champ">
-          <label className="agency-etiquette" htmlFor="agency-demande-description">
+          <label className="agency-etiquette" htmlFor={cid("description")}>
             La description
           </label>
           <textarea
             className="agency-saisie agency-saisie--zone"
-            id="agency-demande-description"
+            id={cid("description")}
             name="description"
             rows={5}
             value={description}
@@ -437,6 +558,7 @@ export function FormulaireNouvelleDemande({
             maxLength={BORNES.description.max}
             placeholder="Décrivez ce que vous souhaitez : la page concernée, le texte, la date limite…"
             aria-invalid={champs.includes("description") || undefined}
+            aria-describedby={decrire("description")}
             ref={attacher("description")}
             onChange={(e) => {
               setDescription(e.target.value);
@@ -444,6 +566,7 @@ export function FormulaireNouvelleDemande({
               setErreur("");
             }}
           />
+          <MessageChamp id={cid("erreur-description")} texte={messages.description} />
         </div>
 
         <button className="agency-bouton" type="submit" disabled={enCours}>
@@ -451,6 +574,33 @@ export function FormulaireNouvelleDemande({
         </button>
       </form>
     </section>
+  );
+}
+
+/**
+ /**
+ * Le message d'erreur d'un champ, sous le champ.
+ *
+ * Il est rendu par son `id` parce que le champ le désigne par
+ * `aria-describedby` : c'est ce lien invisible qui fait annoncer « Votre email,
+ * champ invalide, Écrivez une adresse email valide » au lieu d'un champ invalide
+ * sans explication. Le texte est donc dans le flux du lecteur d'écran, et pas
+ * seulement dans la page.
+ *
+ * Pas de `role="alert"` ici : le résumé d'erreurs porte déjà l'alerte, et deux
+ * `alert` apparaissant ensemble annonceraient deux fois la même chose. Le rôle
+ * reste au résumé, et ce message reste du texte associé au champ.
+ *
+ * Le composant renvoie `null` quand il n'y a rien à dire : afficher un conteneur
+ * vide sous chaque champ mettrait une ligne de vide sous six champs, et ferait
+ * danser la mise en page à la première correction.
+ */
+function MessageChamp({ id, texte }: { id: string; texte: string | undefined }) {
+  if (typeof texte !== "string" || texte === "") return null;
+  return (
+    <p className="agency-erreur" id={id}>
+      {texte}
+    </p>
   );
 }
 
@@ -471,7 +621,7 @@ function valider(donnees: {
   telephone: string;
   objet: string;
   description: string;
-}): { erreur: string; manquants: string[] } {
+}): { erreur: string; manquants: string[]; messages: Record<string, string> } {
   const manquants: string[] = [];
 
   if (!estUuid(donnees.serviceId.trim())) manquants.push("service_id");
@@ -486,13 +636,59 @@ function valider(donnees: {
   if (donnees.objet.trim().length < BORNES.objet.min) manquants.push("subject");
   if (donnees.description.trim().length < BORNES.description.min) manquants.push("description");
 
-  let erreur = "";
-  if (manquants.includes("service_id")) erreur = "Choisissez la prestation dont vous avez besoin.";
-  else if (manquants.includes("requester_email")) erreur = "Écrivez une adresse email valide.";
-  else if (manquants.includes("requester_phone")) erreur = "Numéro invalide : utilisez le format +226 70 12 34 56.";
-  else if (manquants.includes("requester_name")) erreur = "Indiquez votre nom (2 caractères minimum).";
-  else if (manquants.includes("subject")) erreur = "Donnez un objet à votre demande (3 caractères minimum).";
-  else if (manquants.includes("description")) erreur = "Décrivez votre demande en quelques mots (10 caractères minimum).";
+  // Un message PAR CHAMP, et non un message unique pour tout le formulaire.
+  //
+  // C'est ce qui permet d'écrire deux fois la même information : une fois dans le
+  // résumé d'erreurs, une fois sous le champ concerné. Le résumé répond à « qu'est-ce
+  // qui ne va pas ? », le message sous le champ répond à « pourquoi celui-là ? ».
+  // Avec un message unique, il faudrait choisir entre les deux, et les deux
+  // questions resteraient sans réponse.
+  //
+  // La liste `manquants` garde son ordre de formulaire : le résumé doit se lire
+  // comme le formulaire se lit, sinon la personne qui le suit ne retrouve pas ses
+  // repères.
+  const messages: Record<string, string> = {};
+  for (const champ of manquants) messages[champ] = MESSAGES_CHAMPS[champ] ?? "Champ incomplet.";
 
-  return { erreur, manquants };
+  // Le titre du bandeau reprend le PREMIER message, dans l'ordre du formulaire.
+  // C'est le même texte, pas une variante : un résumé qui annoncerait autre chose
+  // que ce qui est écrit plus bas serait pire qu'un résumé absent.
+  const premier = Object.keys(messages)[0];
+  const erreur = premier === undefined ? "" : messages[premier];
+
+  return { erreur, manquants, messages };
 }
+
+/**
+ * Les messages d'un champ, en français, dans le vocabulaire du formulaire.
+ *
+ * La clé est le nom technique du champ — celui que le serveur renvoie dans
+ * `champs` — pour qu'une erreur de serveur et une erreur locale se substituent
+ * l'une l'autre sans réécrire le rendu. Une clé absente de cette table est
+ * rendered par un repli neutre plutôt que de laisser le champ muet.
+ */
+const MESSAGES_CHAMPS: Record<string, string> = {
+  service_id: "Choisissez la prestation dont vous avez besoin.",
+  requester_name: "Indiquez votre nom (2 caractères minimum).",
+  requester_email: "Écrivez une adresse email valide.",
+  requester_phone: "Numéro invalide : utilisez le format +226 70 12 34 56.",
+  subject: "Donnez un objet à votre demande (3 caractères minimum).",
+  description: "Décrivez votre demande en quelques mots (10 caractères minimum).",
+};
+
+/**
+ * Le nom lisible d'un champ, pour le résumé d'erreurs.
+ *
+ * Le résumé cite les champs par leur étiquette — « Votre email » — et non par
+ * leur nom technique : un résumé d'erreurs qui parle de `requester_email` n'a
+ * d'autre moyen de rester utile que de publier les clés techniques dans l'écran
+ * du commerçant.
+ */
+const NOMS_LISIBLES: Record<string, string> = {
+  service_id: "Prestation",
+  requester_name: "Votre nom",
+  requester_email: "Votre email",
+  requester_phone: "Téléphone",
+  subject: "L’objet",
+  description: "La description",
+};

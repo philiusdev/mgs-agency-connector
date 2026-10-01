@@ -596,6 +596,39 @@
   font-size: 0.78rem;
 }
 
+.agency-paiement {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.agency-paiement-bouton { margin: 0; min-height: 38px; padding: 8px 12px; }
+.agency-paiement-contact { font-size: 0.82rem; }
+.agency-paiement-message { flex-basis: 100%; margin: 0; color: var(--mgs-alerte); font-size: 0.82rem; line-height: 1.45; }
+
+.agency-forfaits { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.agency-forfait {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--mgs-line-fort);
+  border-radius: var(--mgs-radius);
+  background: var(--mgs-surface-2);
+}
+
+.agency-forfait-entete { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.agency-forfait-nom { margin: 0; color: var(--mgs-ink); font-size: 0.98rem; }
+.agency-forfait-tarif { color: var(--mgs-accent-vif); font-size: 0.94rem; }
+.agency-forfait-description,
+.agency-forfait-essai { margin: 0; color: var(--mgs-ink-doux); font-size: 0.84rem; line-height: 1.5; }
+.agency-forfait-options { display: grid; gap: 5px; margin: 0; padding-left: 18px; color: var(--mgs-ink-doux); font-size: 0.82rem; line-height: 1.45; }
+.agency-forfait-choisir { margin: 4px 0 0; justify-self: start; }
+.agency-forfait-retour { display: grid; gap: 8px; margin-top: 12px; padding: 12px; border-left: 3px solid var(--mgs-succes); background: var(--mgs-surface-2); }
+.agency-forfait-retour-texte { margin: 0; color: var(--mgs-ink); font-size: 0.86rem; line-height: 1.5; }
+
 /* ---- 6. Prestations -------------------------------------------------------- */
 
 .agency-prestations { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
@@ -823,6 +856,86 @@
 .agency-retour--erreur { border-left: 3px solid var(--mgs-danger); background: rgba(232, 93, 93, 0.12); color: var(--mgs-danger); }
 .agency-retour-detail { display: block; margin-top: 4px; color: var(--mgs-ink-doux); font-size: 0.82rem; }
 
+/* Le résumé d'erreurs reçoit le focus, donc il lui faut un anneau visible : sans
+ * lui, la personne qui navigue au clavier ne voit pas où le focus vient d'arriver
+ * et croit que le formulaire a sauté. `:focus-visible` et non `:focus`, pour ne
+ * pas dessiner d'anneau au clic de la souris. */
+.agency-retour--erreur:focus-visible {
+  outline: 2px solid var(--mgs-danger);
+  outline-offset: 2px;
+}
+
+.agency-retour-titre { margin: 0 0 8px; font-weight: 600; }
+
+.agency-resume-erreurs { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+
+.agency-resume-lien {
+  color: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Le lien du résumé doit rester lisible sur fond rouge : sa couleur est
+ * héritée, et `var(--mgs-danger)` seul sur `rgba(232, 93, 93, 0.12)` tomberait
+ * sous 4.5:1. C'est le texte de la pastille qui porte le contraste, pas le trait. */
+.agency-resume-lien:hover { color: var(--mgs-ink); }
+
+/* Le message d'un champ, sous le champ. La couleur d'alerte est un RENVOI à la
+ * variable, jamais une valeur écrite en dur : le thème du site client peut
+ * redéfinir `--mgs-danger`, et une copie figée divergerait de la pastille. */
+.agency-erreur {
+  margin: 0;
+  color: var(--mgs-danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* ---- 12. Actions de devis ----------------------------------------------------- */
+
+.agency-devis-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--mgs-line);
+}
+
+.agency-devis-actions .agency-section-intro { margin: 0; }
+
+/* Les deux boutons côte à côte sur large, empilés sur étroit : à 320 px deux
+ * boutons de texte long ne tiennent plus et se tronquent l'un l'autre. */
+.agency-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.agency-actions .agency-bouton { flex: 1 1 auto; min-width: 140px; margin-top: 0; }
+
+@media (max-width: 380px) {
+  .agency-actions .agency-bouton { flex: 1 1 100%; }
+}
+
+.agency-boite {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--mgs-line-fort);
+  border-radius: var(--mgs-radius);
+  background: var(--mgs-surface-2);
+}
+
+.agency-boite-titre { margin: 0; font-size: 0.92rem; font-weight: 600; color: var(--mgs-ink); }
+.agency-boite-texte { margin: 0; color: var(--mgs-ink-doux); font-size: 0.82rem; line-height: 1.5; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .agency-boite { animation: agency-boite-entree 140ms ease-out; }
+}
+
+@keyframes agency-boite-entree {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
 /* ---- 12. Bandeau de facturation du tableau de bord --------------------------- */
 
 .agency-banners { display: grid; gap: 8px; margin-bottom: 16px; }
@@ -842,6 +955,7 @@
 
 .agency-banner-warning { border-color: rgba(232, 185, 58, 0.45); background: rgba(232, 185, 58, 0.1); }
 .agency-banner-info { background: var(--mgs-accent-soft); }
+.agency-banner-info .agency-banner-icone { color: var(--mgs-accent); }
 .agency-banner-icone { flex: none; color: var(--mgs-alerte); font-size: 1.1rem; line-height: 1; }
 .agency-banner-texte { flex: 1; min-width: 0; }
 .agency-banner-action { margin-left: auto; }

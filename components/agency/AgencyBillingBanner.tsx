@@ -1,5 +1,4 @@
-import { decrirePrix } from "@/lib/agency/contrat-partage";
-import type { AgencyBilling, AgencyInvoice } from "@/lib/agency/types";
+import type { AgencyBilling } from "@/lib/agency/types";
 
 /**
  * Bandeau de facturation, en haut du tableau de bord du commerçant.
@@ -9,8 +8,8 @@ import type { AgencyBilling, AgencyInvoice } from "@/lib/agency/types";
  * composant serveur, ce qui évite d'expédier du JavaScript pour deux lignes de
  * texte — et, plus important, évite le piège de la référence cliente : une
  * fonction importée depuis un module `"use client"` n'est plus une fonction
- * depuis un composant serveur, et l'appeler lèverait. `totalFactures`, définie
- * ici, est donc utilisable des deux côtés.
+ * depuis un composant serveur, et l'appeler lèverait. Le bandeau ne calcule aucun
+ * état de paiement.
  *
  * Ce bandeau est HORS CONTRAT, comme `AgencyBilling` lui-même :
  * `/api/v1/billing` n'est pas sérialisé par le contrat partagé. Trois décisions
@@ -20,41 +19,70 @@ import type { AgencyBilling, AgencyInvoice } from "@/lib/agency/types";
  *    aucune migration ne portant de colonne d'expiration de domaine. L'afficher
  *    produirait un « Votre nom de site expire le… » que personne ne peut
  *    vérifier, donc un avertissement permanent et faux.
- *  - RIEN DE L'ABONNEMENT. La plateforme renvoie un `subscription` redondant ;
- *    l'abonnement est déjà dans `AgencySpace.abonnement`, produit par le contrat.
- *    Le répéter ici afficherait deux fois la même formule, avec deux libellés
- *    possibles, et le commerçant ne saurait pas lequel fait foi.
- *  - AUCUN « 0 F CFA ». Le total passe par `decrirePrix`, le même chemin qu'une
- *    prestation ou qu'une demande : une somme à zéro s'écrit « Inclus ». Une
- *    soustraction suivie d'un `Intl` aurait produit « 0 F CFA », qui se lit
- *    comme une erreur de saisie.
+ *  - L'ABONNEMENT affiché reste celui du contrat agence. Le résumé ne reformule
+ *    aucun statut ni forfait.
+ *  - AUCUN TOTAL MULTIDEVISE. Chaque facture porte sa devise propre; le résumé
+ *    compte les factures et laisse leurs montants détaillés au panneau.
  *
  * `billing_available === false` n'est pas une panne : c'est la réponse complète
  * que la plateforme fait quand cet espace n'a pas de facturation. Le bandeau ne
  * rend alors RIEN, parce qu'un bandeau vide attire l'œil et fait croire qu'il
  * manque une information.
+ *
+ * L'ABSENCE DE RÉPONSE, EN REVANCHE, SE DIT
+ * -------------------------------------------
+ * `billing === null` a deux significations, et le connecteur les confondait.
+ * La plateforme peut renvoyer une réponse complète qui dit « cet espace n'a pas
+ * de facturation » : là, ne rien afficher est juste, le commerçant n'a rien à
+ * régler. Ou bien la lecture n'a pas abouti du tout — clé absente, 503, réseau
+ * mort — et dans ce cas le silence était un MENSONGE : le bandeau disparaissait
+ * chez un commerçant qui a peut-être trois factures impayées, et le tableau de
+ * bord affichait « 0 facture à régler » alors que personne n'avait rien compté.
+ * `space.indisponibles` distingue déjà ces deux cas ; le bandeau le reçoit donc
+ * par `indisponible`, et dit ce qu'il sait : la facturation n'a pas pu être
+ * consultée, ce qui est une information et non une catastrophe.
+ *
+ * Le ton reste celui d'un `agency-banner-info`, jamais celui d'une alerte : une
+ * lecture ratée de la plateforme ne doit pas s'afficher comme une facture
+ * impayée à côté d'un vrai avertissement de paiement.
  */
-
-/** Somme des factures impayées, telle que le contrat l'écrirait. */
-export function totalFactures(factures: AgencyInvoice[] | null | undefined): string {
-  const liste = Array.isArray(factures) ? factures.filter(Boolean) : [];
-  const centimes = liste.reduce((somme, facture) => somme + (facture.montant_cents || 0), 0);
-  const devise = liste.find((facture) => typeof facture.devise === "string")?.devise ?? null;
-  return decrirePrix({ montant_cents: centimes, devise }).libelle;
-}
 
 export type AgencyBillingBannerProps = {
   /** Facturation de l'espace. `null` → rien ne s'affiche, c'est voulu. */
   billing?: AgencyBilling | null;
-  /** Lien de repli pour payer, quand le portail en ligne n'est pas disponible. */
+  /** Contact de l'agence si la plateforme demande un règlement manuel. */
   lienContact?: string | null;
+  /**
+   * La plateforme n'a pas pu servir `/api/v1/billing`.
+   *
+   * Vient de `space.indisponibles`, jamais recalculé ici : le composant lit un
+   * fait, il ne le décide pas. `false` avec `billing === null` laisse le bandeau
+   * se taire, comme avant.
+   */
+  indisponible?: boolean;
 };
 
-export function AgencyBillingBanner({ billing, lienContact }: AgencyBillingBannerProps) {
-  // `null` signifie que la plateforme n'a pas répondu : ni facture, ni bandeau.
-  // Un bandeau « facturation indisponible » ferait crier une panne inexistante
-  // sur un site par ailleurs parfaitement fonctionnel.
-  if (!billing || typeof billing !== "object") return null;
+export function AgencyBillingBanner({ billing, lienContact, indisponible }: AgencyBillingBannerProps) {
+  // Aucune réponse de la plateforme sur la facturation : le bandeau le dit
+  // plutôt que de disparaître. Sans cela, un commerçant ayant une facture
+  // impayée voyait un tableau de bord parfaitement vert et conclut qu'il n'avait
+  // rien à régler.
+  if (!billing || typeof billing !== "object") {
+    if (indisponible !== true) return null;
+    return (
+      <div className="agency-banners" role="status" aria-live="polite">
+        <div className="agency-banner agency-banner-info">
+          <span className="agency-banner-icone" aria-hidden="true">
+            ▤
+          </span>
+          <span className="agency-banner-texte">
+            Facturation indisponible : les factures de cet espace n’ont pas pu être
+            consultées. Réessayez dans un instant.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (billing.billing_available !== true) return null;
 
@@ -63,12 +91,6 @@ export function AgencyBillingBanner({ billing, lienContact }: AgencyBillingBanne
     : [];
   if (impayees.length === 0) return null;
 
-  // Le bouton suit deux conditions : la plateforme autorise le paiement en ligne,
-  // ET elle fournit une vraie URL. Un portail proposé alors que le paiement est
-  // désactivé enverrait le commerçant dans un cul-de-sac.
-  const portal = typeof billing.portal_url === "string" ? billing.portal_url : null;
-  const cible = billing.can_pay_online === true ? portal : lienContact ?? null;
-
   return (
     <div className="agency-banners" role="status" aria-live="polite">
       <div className="agency-banner agency-banner-warning">
@@ -76,12 +98,11 @@ export function AgencyBillingBanner({ billing, lienContact }: AgencyBillingBanne
           ▤
         </span>
         <span className="agency-banner-texte">
-          {impayees.length === 1 ? "1 facture en attente" : `${impayees.length} factures en attente`}
-          {` — ${totalFactures(impayees)}`}
+          {impayees.length === 1 ? "1 facture à régler" : `${impayees.length} factures à régler`}
         </span>
-        {cible && (
-          <a className="agency-bouton agency-bouton--secondaire agency-banner-action" href={cible}>
-            Voir et payer
+        {billing.can_pay_online !== true && lienContact && (
+          <a className="agency-bouton agency-bouton--secondaire agency-banner-action" href={lienContact}>
+            Contacter l’agence
           </a>
         )}
       </div>

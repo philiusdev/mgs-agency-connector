@@ -83,6 +83,53 @@ export function jetonAbonnement(code: string | null | undefined): string {
 }
 
 /**
+ * Le nom accessible d'un bouton CONTIENT son texte visible.
+ *
+ * C'est le critère WCAG 2.5.3 « Label in Name », et c'est un critère de conformité,
+ * pas une préférence. Un bouton dont l'écran affiche « Mon agence » et dont le
+ * lecteur d'écran annonce « Ouvrir le panneau de l'agence » casse deux usages à la
+ * fois : la personne qui navigue au clavier ne sait plus quel bouton est lequel,
+ * et la personne qui commande par la voix dit « Clique Mon agence » sans que
+ * l'appareil reconnaisse ce qu'elle a lu à l'écran.
+ *
+ * La fonction prend les DEUX moitiés parce qu'elles ont deux origines qu'il ne faut
+ * pas confondre : le texte visible vient de la feuille de style du site client ou
+ * de la configuration du commerçant, le libellé accessible vient du contrat
+ * partagé. Les deux sont donc des données, et aucune n'est fiable par
+ * construction — d'où la règle : le nom rendu CONTIENT le texte visible, quoi qu'il
+ * arrive.
+ *
+ * L'ordre est visible d'abord. « Mon agence : ouvrir le panneau de l'agence » se
+ * prononce dans le bon ordre, alors que « Ouvrir le panneau de l'agence — Mon
+ * agence » force l'utilisateur à attendre la fin pour savoir de quoi il s'agit.
+ *
+ * Si le libellé accessible contient déjà le texte visible — cas normal quand
+ * l'agence n'a pas personnalisé — on ne le répète pas : « Mon agence : Mon
+ * agence » se prononce deux fois et devient plus pénible que le bug qu'on corrige.
+ *
+ * Si l'un des deux est vide, l'autre fait foi : un bouton sans texte visible
+ * n'a rien à contenir, et un `aria-label` vide rendrait le bouton muet.
+ */
+export function composerLibelleAccessibleBouton(
+  texteVisible: string | null | undefined,
+  libelleAccessible: string | null | undefined,
+): string {
+  const visible = typeof texteVisible === "string" ? texteVisible.trim() : "";
+  const nom = typeof libelleAccessible === "string" ? libelleAccessible.trim() : "";
+
+  if (visible === "") return nom;
+  if (nom === "") return visible;
+  if (contientInsensibleALaCasse(nom, visible)) return nom;
+  return `${visible} : ${nom}`;
+}
+
+/** Recherche de sous-chaîne qui ignore casse et espaces multiples. */
+function contientInsensibleALaCasse(texte: string, fragment: string): boolean {
+  const normaliser = (valeur: string) => valeur.replace(/\s+/g, " ").trim().toLowerCase();
+  return normaliser(texte).includes(normaliser(fragment));
+}
+
+/**
  * Pastille de statut : le libellé du contrat, la classe de la feuille.
  *
  * `libelle` n'est jamais recalculé ici. `statut_libelle` porte déjà la décision

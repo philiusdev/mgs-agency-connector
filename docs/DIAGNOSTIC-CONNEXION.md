@@ -1,197 +1,180 @@
-# Diagnostic : « pourquoi les connexions ne passent pas sur les sites ? »
+# Diagnostic de la connexion site ↔ plateforme
 
-Agent 7 — chaîne de connexion site client ↔ plateforme MindGraphixSolution.
-Toutes les affirmations ci-dessous sont vérifiables : chemin de fichier + numéro
-de ligne, ou sortie de commande.
+Ce document sert à une chose : trouver **où** une connexion entre un site client
+et la plateforme MindGraphixSolution est cassée, et dire quoi faire ensuite.
 
----
+Il ne contient pas d'état du projet. Un tel instantané vieillit mal — il décrit
+quatre dépôts qui bougent en continu, et il finit par affirmer des choses
+fausses à un technicien censé diagnostiquer une panne. Ce qui est écrit ici est
+vérifiable dans le code, avec un chemin de fichier et un numéro de ligne, ou
+par une commande à exécuter.
 
-## 1. La cause racine, en une phrase
-
-**Aucune des trois variables `MGS_*` n'existe dans aucun `.env.local`, et il n'y a
-même pas de `.env.local` dans deux dépôts sur quatre.**
-
-Vérifié par lecture de noms de variables uniquement (jamais de valeur) :
-
-| Dépôt | `.env.local` | `MGS_PLATFORM_URL` | `MGS_SITE_KEY` | `MGS_SITE_SECRET` |
-|---|---|---|---|---|
-| `plateforme-mindgraphixsolution` | présent (763 o) | sans objet | sans objet | sans objet |
-| `template-boutique-mgs` | **ABSENT** | **ABSENTE** | **ABSENTE** | **ABSENTE** |
-| `site-vitrine-mindgraphixsolution` | présent | **ABSENTE** | sans objet | sans objet |
-| `mgs-agency-connector` | **ABSENT** | n'est pas un site | n'est pas un site | n'est pas un site |
-
-Et le point qui rend ce diagnostic si grave : `lib/agency/client.ts:74`
-
-```ts
-if (!platformUrl || !siteKey || !siteSecret) return null;
-```
-
-`return null` **avant tout appel réseau**, sans `console.error`. C'est la
-différence entre « la plateforme est down » et « personne n'a jamais configuré
-ce site » : les deux produisent exactement la même absence d'affichage, mais la
-seule trace de la seconde est une variable absente d'un fichier non commité.
-
-Ce n'est pas qu'une théorie. Le site vitrine le prouve par l'absentéisme :
-`site-vitrine-mindgraphixsolution/.env.local` ne contient que
-`VERCEL_OIDC_TOKEN`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-Son `.env.example` ligne 2 propose `MGS_PLATFORM_URL=http://localhost:3001` — le
-port `3001` ne correspond à aucun serveur configuré, et le `.env.local` ne suit
-même pas son propre `.env.example`.
-
-**Correction qui prend 3 minutes par site** : créer le `.env.local`, y mettre les
-trois lignes, redémarrer le serveur. Rien d'autre n'est nécessaire pour que la
-chaîne démarre.
+L'installation, elle, est décrite dans `INSTALLATION-CONNECTEUR.md`, sections
+« Vérifier que ça marche » et « En cas de problème ». Ce document ne s'y
+substitue pas : il sert une fois l'intégration en place et le symptôme constaté.
 
 ---
 
-## 2. Tableau de diagnostic
+## 1. Trois couches, trois outils
 
-Chaque ligne est vérifiable par une commande unique. `PB` = la cause est
-présente dans l'état actuel du dépôt (vérifié par lecture de fichier).
+Une panne se situe toujours dans l'une de ces trois couches. Les diagnostiquer
+dans cet ordre évite de chercher du côté de la plateforme un problème qui
+est dans le site.
 
-| # | Cause | Comment vérifier en une commande | Attendu | État |
-|---|---|---|---|---|
-| 1 | **Variables absentes** | `grep -c '^MGS_SITE_SECRET=' template-boutique-mgs/.env.local` | `1` | **PB** — fichier inexistant |
-| 2 | URL en HTTP hors localhost | voir §3, garde ligne `client.ts:85` | refus | non applicable (pas d'URL) |
-| 3 | `127.0.0.1` au lieu de `localhost` | voir §3, ligne `client.ts:85` | refus | **risque réel**, `.env.example` du site vitrine propose `localhost` (correct) mais rien ne l'empêche |
-| 4 | Clé absente en base | SQL Editor, §5 | 1 ligne | **inconnu** — non vérifiable sans base |
-| 5 | Secret révoqué / mal recopié | `revoked_at IS NULL` en base | non révoqué | **inconnu** — non vérifiable sans base |
-| 6 | `sites.tenant_id` NULL | SQL Editor, §5 | non NULL | **inconnu** — non vérifiable sans base |
-| 7 | Migration 017 non appliquée | voir §4 | 200 | **incertain** — le fichier est dans le dépôt, l'application à la base est inconnue |
-| 8 | Rate limit 60/min | `node scripts/verifier-connexion.mjs --site <site> --en-ligne --charge` | pas de 429 | **inconnu** — voir §6, aggravé par le cache 300 s |
-| 9 | Dérive de contrat | voir §3 | `agence.identite` | **PB — confirmé** (`space.ts:134` du template) |
-| 10 | Cache `revalidate: 300` | `grep -n 'revalidate: 300' lib/agency/client.ts` | `60` | **PB dans le template**, corrigé dans le connecteur |
-| 11 | Dev : secret modifié sans redémarrage | `client.ts:1-3` du template | lecture par appel | **PB dans le template**, corrigé dans le connecteur |
-| 12 | Variables absentes de Vercel | `vercel env ls` | les 3 variables | **probable** — `.vercel/` ne contient que `project.json` |
-| 13 | Site vitrine sans clé de site | `grep -rn 'api/v1/agency' site-vitrine-mindgraphixsolution` | occurrence | **confirmé, sans conséquence** — le vitrine n'appelle pas cette route |
+| Couche | Ce qui s'y joue | L'outil qui la parle |
+|---|---|---|
+| **1. Le site** | Variables d'environnement, session Supabase, rôle du compte, origine des appels, quota d'envoi | `scripts/verifier-connexion.mjs` (hors ligne), puis les journaux `[mgs-agency]` |
+| **2. La liaison** | URL de la plateforme, garde de sécurité HTTPS/origine, forme de la réponse | `scripts/verifier-connexion.mjs --en-ligne` |
+| **3. La plateforme** | Base, tables, migrations, privileges, quota de 60 requêtes/minute | `GET /api/health` **de la plateforme** |
 
-### Précision sur les causes 1, 9, 10, 11 : elles se cumulent
-
-Ce ne sont pas quatre hypothèses concurrentes. Le template-boutique cumule
-**les quatre simultanément**, et chacune suffit à elle seule à produire un écran
-vide. C'est ce qui rend le symptôme si trompeur : même en corrigeant les
-variables, l'onglet resterait vide, parce que `space.ts` lirait toujours un
-contrat qui n'existe plus.
+> `app/api/health/route.ts` de ce dépôt n'est pas l'outil de la couche 3. Cette
+> route répond `status`, `version` et `timestamp`, n'appelle jamais la plateforme
+> et ne dit rien de la connexion : c'est une sonde de disponibilité du site, et
+> son en-tête de fichier exclut volontairement cet usage (§3).
 
 ---
 
-## 3. Les deux pièges vérifiés dans le code
+## 2. Le script, d'abord
 
-### 3.1 `localhost` ≠ `127.0.0.1` — confirmé
+Aucune dépendance, uniquement du Node natif. Depuis la racine de ce dépôt :
 
-`lib/agency/client.ts:82-89` :
+```bash
+# Hors ligne : variables, garde SSRF, dérive de contrat, prérequis plateforme
+node scripts/verifier-connexion.mjs
 
-```ts
-if (
-  requestUrl.origin !== baseUrl.origin
-  || !requestUrl.pathname.startsWith("/api/v1/")
-  || (baseUrl.protocol !== "https:" && baseUrl.hostname !== "localhost")
-) {
+# Idem, sur un site client voisin
+node scripts/verifier-connexion.mjs --site ../template-boutique-mgs
+
+# + un vrai GET sur /api/v1/agency, /api/v1/announcements, /api/v1/billing
+node scripts/verifier-connexion.mjs --site ../template-boutique-mgs --en-ligne
+
+# + mesure de la marge sous la limite de 60 requêtes/minute (10 appels de plus)
+node scripts/verifier-connexion.mjs --site ../template-boutique-mgs --en-ligne --charge
+
+# Tester une URL seule, sans lire de fichier
+node scripts/verifier-connexion.mjs --url http://127.0.0.1:3000
 ```
 
-`new URL("http://127.0.0.1:3000").hostname` vaut la chaîne `"127.0.0.1"`, qui
-n'est jamais égale à `"localhost"`. Rejeu du garde sur 8 URL (résultat mesuré) :
+Options : `--site <chemin>`, `--plateforme <chemin>`, `--url <url>`,
+`--en-ligne`, `--charge`, `--timeout-s <n>` (défaut 8), `-a`/`--aide`.
 
-```
-AUTORISE  http://localhost:3000                (hostname=localhost,    proto=http:)
-REFUSE    http://127.0.0.1:3000                (hostname=127.0.0.1,   proto=http:)
-REFUSE    http://[::1]:3000                    (hostname=[::1],       proto=http:)
-AUTORISE  https://plateforme.vercel.app        (hostname=plateforme.vercel.app, proto=https:)
-AUTORISE  https://plateforme.vercel.app/       (slash final : sans conséquence)
-AUTORISE  https://plateforme.vercel.app///     (plusieurs slashs : sans conséquence)
-REFUSE    http://plateforme.vercel.app         (HTTP en production : refusé)
-AUTORISE  https://plateforme.vercel.app/base   (le /base sera ignoré, pas refusé)
-```
+**Code de retour : `0` si aucun problème n'est détecté, `1` sinon.** Le script
+termine par un verdict qui récapitule les contrôles passés et les corrections,
+dans l'ordre.
 
-Le même garde existe côté plateforme, `lib/site-auth.ts:7`. Les deux comparaisons
-doivent être contournées simultanément : une URL en `http://127.0.0.1` est
-refusée **des deux côtés**.
+### Ce que le script vérifie
 
-Bonne nouvelle : les slashs finaux sont inoffensifs, `client.ts:71` fait
-`.replace(/\/+$/, "")`.
+| Section | Contrôle |
+|---|---|
+| `[1]` | Présence de `MGS_PLATFORM_URL`, `MGS_SITE_KEY`, `MGS_SITE_SECRET` et du filet `MGS_AGENCY_*`. Aucune valeur n'est affichée : au mieux la longueur, et 4 caractères du SHA-256 du secret. |
+| `[2]` | Rejoue hors réseau le garde de `lib/agency/client.ts:303-310` sur l'URL du site, et signale les cas réels qu'il refuse (§7.1). Vérifie ensuite dans `lib/agency/client.ts` du site si les variables sont lues à chaque appel ou au chargement du module. |
+| `[3]` | Dérive de contrat : `space.ts` lit-il `agence.identite`, `types.ts` expose-t-il `prestations`/`offres`/`abonnement`/`demandes`, `contrat-partage.ts` est-il présent. C'est la panne la plus trompeuse : aucune erreur n'est affichée, l'onglet est simplement vide. |
+| `[4]` | Côté plateforme : `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` dans son `.env.local`, présence de la migration de référence attendue par le script (voir la limite ci-dessous), cohérence entre cette référence et la version qu'annonce la sonde `/api/health`, présence de `scripts/create-site-credential.mjs`. |
+| `[5]` | `--en-ligne` : GET authentifié sur les trois routes, traduction de chaque statut HTTP en cause et en correction, vérification de la forme de la réponse quand le statut est 200. |
+| `[6]` | Rappelle les trois requêtes SQL de lecture seule à jouer dans le SQL Editor si un test HTTP ne suffit pas (§6). |
 
-### 3.2 La dérive de contrat — confirmée par lecture de fichier
+### Ce que le script ne fait jamais
 
-`plateforme-mindgraphixsolution/app/api/v1/agency/route.ts:89-111` renvoie :
+- Il n'écrit rien et n'exécute aucune commande de création ou de rotation d'identifiants (`create-site-credential.mjs`).
+- Il ne se connecte pas à Supabase.
+- Il n'affiche aucun secret, en clair ni tronqué au-delà de l'empreinte.
+- Hors `--en-ligne`, il n'effectue aucun appel réseau.
 
-```ts
-{
-  agence: { identite, bouton_flottant },
-  prestations, offres, abonnement, demandes,
-}
-```
+### Deux limites à connaître
 
-`template-boutique-mgs/lib/agency/space.ts:132-141` lit :
-
-```ts
-return {
-  agency: {
-    name: textOf(platform?.name, 80) || local.name,
-    whatsapp: digitsOf(platform?.whatsapp) ?? local.whatsapp,
-    ...
-  offers: normalizeOffers(platform?.offers),
-  ...
-};
-```
-
-`platform?.name` est `undefined` (le vrai champ est `agence.identite.nom`),
-`platform?.offers` est `undefined` (le vrai champ est `offres`). **Aucune de ces
-lectures ne lève** — `textOf(undefined)` renvoie `""`, `normalizeOffers(undefined)`
-renvoie `[]`. Le repli masque tout : le site affiche « MindGraphixSolution »,
-coordonnées vides, zéro offre, zéro erreur.
-
-Le connecteur a bien été corrigé : `mgs-agency-connector/lib/agency/space.ts:590-593`
-lit `agence?.identite ?? plateforme?.identite`. **Le template n'a pas reçu cette
-correction** — `template-boutique-mgs/lib/agency/` date du 29/09 00:07, le
-connecteur du 30/09 10:42.
-
-Le template n'a pas non plus `lib/agency/contrat-partage.ts`, absent du dépôt.
+- La version de migration que le script attend est une constante inscrite dans
+  le script lui-même, pas une référence : elle peut être plus ancienne que celle
+  que la plateforme attend réellement. La source de vérité reste la constante
+  `DERNIERE_MIGRATION_ATTENDUE` de `plateforme/app/api/health/route.ts`.
+- Le script ne teste pas les routes `/api/agency/*` du site. Il valide la
+  configuration de `lib/agency/` et la liaison vers la plateforme ; la couche
+  « session, rôle, origine » reste à vérifier dans les journaux du site (§5).
 
 ---
 
-## 4. Blocage secondaire côté plateforme
+## 3. La sonde `/api/health` de la plateforme
 
-`lib/supabase-admin.ts:2` :
+C'est le troisième outil, mais il n'appartient pas à ce dépôt : c'est
+`plateforme-mindgraphixsolution/app/api/health/route.ts`. Elle est publique, sans
+authentification, et répond en JSON.
 
-```ts
-export function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Configuration Supabase manquante");
-```
+Elle contrôle six choses, et s'arrête avant les cinq dernières si la base ne
+répond pas (elle renvoie alors `503` et `status: "hs"` immédiatement) :
 
-Le `.env.local` de la plateforme contient 5 variables : `SUPABASE_DB_URL`,
-`SUPABASE_PROJECT_REF`, `SUPABASE_ACCESS_TOKEN`, `RESEND_API_KEY`, `RESEND_DOMAIN`.
-**Ni `NEXT_PUBLIC_SUPABASE_URL` ni `SUPABASE_SERVICE_ROLE_KEY`.**
+1. que la base répond ;
+2. que les tables attendues du schéma `public` existent ;
+3. que les seize tables du schéma `faso_mode` existent ;
+4. que la base est à jour des migrations ;
+5. qu'aucun privilège `ALL`/`TRUNCATE` n'échappe à la RLS ;
+6. que les boutiques sont joignables (sur un échantillon de 200).
 
-Or aucune des 10 routes `/api/v1/*` n'entoure `authenticateSite` d'un
-`try/catch` (vérifié : `grep -c "try {"` renvoie 0 pour `agency`, `agency/requests`,
-`announcements`, `billing`, `tickets`, `heartbeat`, `billing/paiement`). Une
-exception dans `authenticateSite` remonte telle quelle → **HTTP 500** sur toutes
-les routes API → `client.ts:115` arme la fenêtre d'échec 20 s → le site affiche
-« Plateforme momentanément indisponible ».
+Elle renvoie `status` (`ok`, `degrade`, `hs`), un résumé, la durée du contrôle,
+le détail de chaque vérification, et des mesures (nombre total de sites,
+inactifs…). Le code HTTP `503` n'est renvoyé que pour `hs` — un `degrade` se
+lit dans le corps.
 
-Deux réserves honnêtes :
-- si la plateforme tourne **sur Vercel**, ces variables sont dans le tableau de
-  bord du projet et ce diagnostic local est muet ;
-- `.vercel/project.json` existe (`prj_AWFrn6AFipEFX9g1zHfi1SBm14MF`), la
-  plateforme est donc probablement déployée. Il faut vérifier sur Vercel.
-
-**Caveat proche** : `app/api/health/route.ts:25` déclare
-`DERNIERE_MIGRATION_ATTENDUE = "202609290014"` alors que la dernière migration du
-dépôt est `202609290017`. La sonde dira « migrations OK » sur une base à
-`202609290016`, alors que `/api/admin/agency/config` exige explicitement la 017
-et renverrait 503. **La page de santé ne peut pas servir de preuve ici.**
+**Ce que cette sonde ne couvre pas :** elle décrit l'état de la plateforme, pas
+celui d'un site client donné. Elle ne dit rien de la clé, du secret, de
+l'URL déclarée par un site, ni de sa configuration. Un `ok` n'exclut pas qu'un
+site particulier soit mal configuré.
 
 ---
 
-## 5. Les trois requêtes SQL à jouer (lecture seule)
+## 4. Symptômes et causes
 
-Je ne les ai pas exécutées — elles touchent la base réelle. À jouer dans le SQL
-Editor de Supabase, elles ne modifient rien :
+| Symptôme | Cause probable | Où le vérifier | Correction |
+|---|---|---|---|
+| L'onglet « Mon agence » est absent, aucune erreur visible | Une des trois variables critiques manque, ou le filet de repli n'est pas configuré | `node scripts/verifier-connexion.mjs` | Renseigner les variables dans `.env.local`, puis redémarrer le serveur de développement |
+| L'onglet est présent mais vide, sans message d'erreur | Une dérive de contrat (`space.ts` lit un contrat plat au lieu de `agence.identite`) | Script, section `[3]` | Recopier `lib/agency/` depuis ce dépôt vers le site client |
+| Le nom de l'agence s'affiche mais pas le WhatsApp | La plateforme n'a pas de numéro renseigné pour cette identité | Script, section `[3]`, qui signale l'absence | Renseigner le WhatsApp dans l'administration de la plateforme |
+| Un changement fait dans l'administration n'apparaît pas sur le site | Le cache des lectures n'a pas encore expiré | Attendre `MGS_CACHE_REVALIDATE_S` (60 s par défaut) ou appeler `POST /api/agency/revalidate` | Purger explicitement (§7.2) ; ce n'est pas une panne |
+| `401 Non autorisé` sur `/api/v1/agency` | Clé inconnue, révoquée, ou secret qui ne correspond pas au SHA-256 stocké | Script `--en-ligne`, ou SQL : `site_credentials.revoked_at IS NULL` | Relancer `create-site-credential.mjs` côté plateforme ; le secret n'est affiché qu'une fois |
+| `409 Boutique non rattachée au backend commun` | `sites.tenant_id` est `NULL` | SQL : `select tenant_id from sites where key_id = '…'` | Relancer `create-site-credential.mjs` : il crée le tenant, le site et le rattache |
+| `400 Connexion sécurisée requise` | L'URL de la plateforme est en HTTP hors `localhost` | Script, section `[2]` | Passer en `https://` |
+| `429 Limite de requêtes atteinte` | 60 requêtes/minute par site, appliquées en base | Script `--en-ligne --charge` | Augmenter `MGS_CACHE_REVALIDATE_S` (300 s max) ; le panneau fait 3 GET par rendu |
+| `500` sur toutes les routes `/api/v1/*` | `NEXT_PUBLIC_SUPABASE_URL` ou `SUPABASE_SERVICE_ROLE_KEY` absente côté plateforme | Script, section `[4]` ; `getAdminClient()` lève à `lib/supabase-admin.ts:2` | Renseigner ces deux variables dans le `.env.local` de la plateforme (ou sur Vercel) |
+| `503` sur `/api/v1/agency` ou `/api/v1/billing` | Base en retard de migration, ou table/colonne manquante | `GET /api/health` de la plateforme ; section `migrations` | Appliquer les migrations en retard ; la sonde indique la version attendue |
+| Le crédit « Site créé par MindGraphixSolution » s'affiche mais sans lien | `MGS_WEBSITE_URL` absente ou invalide | Script, section `[1]` | Renseigner `MGS_WEBSITE_URL` en toutes lettres, en `http` ou `https` uniquement |
+| Le formulaire de demande renvoie `401 Connectez-vous pour envoyer une demande` | `MGS_AGENCY_REQUIRER_SESSION` vaut `1` ou est absente (c'est le défaut) | `app/api/agency/request/route.ts:258` | C'est le comportement voulu. Seul `0` rouvre le formulaire anonyme |
+| Le bouton flottant n'apparaît pas | Le contrat de la plateforme décide de sa visibilité : numéro absent, ou bouton désactivé dans l'administration | `space.identite.bouton_flottant` ; administration de la plateforme | Activer le bouton et renseigner un WhatsApp côté plateforme |
+| Aucun bandeau de facturation ne s'affiche | C'est le comportement normal : le bandeau ne rend rien tant que `billing_available` n'est pas `true` et qu'il n'y a aucune facture impayée | `components/agency/AgencyBillingBanner.tsx` | Rien à corriger. Le domaine n'est pas traité : `/api/v1/billing` renvoie toujours `domain: null` |
+
+---
+
+## 5. Ce que le script ne voit pas : la couche « site »
+
+Les cinq routes du connecteur (`heartbeat`, `request`, `requests`,
+`requests/reponse`, `revalidate`) passent toutes par
+`app/api/agency/_interne/securite.ts`. C'est le seul fichier du connecteur qui
+dépend de l'authentification du site : il appelle `createClient()`, lit
+`public.profiles` et compare le rôle à `ROLES_ADMINISTRATION = ["admin"]`
+(`securite.ts:41`). Aucun de ces contrôles n'est vérifié par le script ni par la
+sonde `/api/health` de la plateforme.
+
+| Journal ou statut sur le site | Cause | Correction |
+|---|---|---|
+| `[mgs-agency] Configuration d'authentification illisible.` puis `401 Authentification indisponible. Réessayez dans un instant.` | `createClient()` a levé (`securite.ts:135`) | Vérifier que `@/lib/supabase/server` exporte bien `createClient()` et que la configuration Supabase du site est complète |
+| `[mgs-agency] Lecture de session impossible.` puis le même `401` | `auth.getUser()` a échoué (`securite.ts:146`) | Même piste : c'est l'authentification du site, pas la plateforme |
+| `[mgs-agency] Rôle du compte illisible.` puis `403 Rôle du compte illisible.` | La lecture de `profiles` a levé (`securite.ts:166-170`) | Même piste : la table est inaccessible depuis le client Supabase du site |
+| `403 Accès réservé à l'administration.` | `profiles.role` est absent, ou hors de `ROLES_ADMINISTRATION` (`securite.ts:172-174`). Une table `public.profiles` inexistante tombe dans ce cas : la lecture ne renvoie aucune ligne | Créer `public.profiles` avec `id` et `role`, inscrire le compte avec un rôle de la liste, ou étendre `ROLES_ADMINISTRATION` (`securite.ts:41`) |
+| `403 Origine non autorisée.` ou `403 Origine non vérifiable.` | `POST /api/agency/revalidate` et `POST /api/agency/requests/reponse` comparent l'origine de l'appel à `MGS_WEBSITE_URL` ; sans elle, ou sans en-tête `Origin`, elles exigent un en-tête `X-MGS-Revalidate` (`securite.ts:370-388`) | Renseigner `MGS_WEBSITE_URL`, ou appeler ces routes avec `X-MGS-Revalidate: 1` |
+| `[mgs-agency] Adresse de requête non autorisée.` | `MGS_PLATFORM_URL` ne passe pas le garde d'origine (`client.ts:308`) | Corriger l'URL (§7.1) |
+| `401 Connexion requise.` | Aucun compte connecté, sur une route qui exige une session | Se connecter ; `heartbeat`, `requests`, `requests/reponse` et `revalidate` exigent un administrateur du site |
+
+Sauf l'URL refusée, qui retombe dans le silence du §7.3, ces refus sont des
+`401`/`403` explicites. C'est la différence entre une panne de configuration,
+visible immédiatement, et une panne de service, qui se dégrade en silence.
+
+---
+
+## 6. Les vérifications qui demandent un accès à la base
+
+Le script ne se connecte pas à Supabase. Ces trois requêtes, en lecture seule,
+se jouent dans le SQL Editor de Supabase. Elles ne modifient rien.
+`create-site-credential.mjs` cité plus bas est le script du dépôt plateforme.
 
 ```sql
--- 1. La clé existe-t-elle ? Est-elle révoquée ?
+-- 1. La clé existe-t-elle, et n'est-elle pas révoquée ?
 select key_id, revoked_at, created_at
   from public.site_credentials
  where key_id = '<votre MGS_SITE_KEY>';
@@ -202,251 +185,106 @@ select s.id, s.name, s.tenant_id, s.last_seen_at
  where s.key_id = '<votre MGS_SITE_KEY>';
 -- tenant_id IS NULL  =>  la plateforme répond 409
 
--- 3. La migration est-elle appliquée ?
+-- 3. La base est-elle à jour des migrations ?
 select * from public.derniere_migration();
--- version < 202609290017  =>  /api/admin/agency/config renvoie 503
+-- version < DERNIERE_MIGRATION_ATTENDUE (plateforme/app/api/health/route.ts)
+--   =>  /api/v1/agency peut renvoyer 503
 ```
 
-Lecture des résultats :
-- `0 ligne` au §1 → clé jamais créée ou typo → **relancer `create-site-credential.mjs`**
-- `revoked_at` non NULL → 401 → **relancer le script** (il révoque l'ancien et crée le nouveau)
-- `tenant_id` NULL au §2 → 409 → **relancer le script** (il crée `tenants` + `sites` et rattache)
-- `version` < `202609290017` → appliquer `supabase/migrations/202609290017_agence_commune_et_bouton_flottant.sql`
+Lecture :
+
+- `0 ligne` au point 1 → la clé n'a jamais été créée → relancer `create-site-credential.mjs`.
+- `revoked_at` non `NULL` → la clé a été révoquée, ce que fait `create-site-credential.mjs` quand il régénère un secret → relancer le script.
+- `tenant_id` `NULL` au point 2 → 409 → relancer `create-site-credential.mjs`.
+- `version` en retard au point 3 → appliquer les migrations manquantes, puis purgez le cache du site (§7.2).
 
 ---
 
-## 6. Le test `curl` à copier-coller
+## 7. Les pièges vérifiés dans le code
 
-Le test le plus utile — la chaîne complète, de la clé au statut HTTP :
+### 7.1 `localhost` ≠ `127.0.0.1`
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-  -H "X-Site-Key: $MGS_SITE_KEY" \
-  -H "Authorization: Bearer $MGS_SITE_SECRET" \
-  "$MGS_PLATFORM_URL/api/v1/agency"
+`lib/agency/client.ts:303-310` refuse toute URL dont le protocole n'est pas
+`https:` et dont le nom d'hôte n'est pas exactement la chaîne `"localhost"` (le
+même contrôle existe côté plateforme, sur l'URL qu'il reçoit :
+`lib/site-auth.ts:7-9`) :
+
+```ts
+if (
+  requestUrl.origin !== baseUrl.origin
+  || !requestUrl.pathname.startsWith("/api/v1/")
+  || (baseUrl.protocol !== "https:" && baseUrl.hostname !== "localhost")
+) {
+  return { pret: false };
+}
 ```
 
-Lecture du statut :
+`new URL("http://127.0.0.1:3000").hostname` vaut `"127.0.0.1"`, qui n'est jamais
+égale à `"localhost"`. Un site qui écrit `MGS_PLATFORM_URL=http://127.0.0.1:3000`
+en développement obtient un refus silencieux de toutes ses lectures.
 
-| Statut | Cause | Correction |
-|---|---|---|
-| `200` | tout va bien | — |
-| `400` | HTTP au lieu de HTTPS | passer en `https://`, ou `localhost` littéral |
-| `401` | clé inconnue, révoquée, ou secret faux | vérifier §5 point 1 ; attention aux espaces en fin de ligne |
-| `409` | `sites.tenant_id` est NULL | relancer `create-site-credential.mjs` |
-| `429` | 60 req/min dépassées | attendre 1 min ; augmenter `MGS_CACHE_REVALIDATE_S` |
-| `500` | `NEXT_PUBLIC_SUPABASE_URL` ou `SUPABASE_SERVICE_ROLE_KEY` absente | voir §4 |
-| `503` | migration absente, ou table/colonne manquante | appliquer la 017 |
+Les slashs finaux sont inoffensifs : `client.ts:291` fait
+`.replace(/\/+$/, "")`. Un chemin dans l'URL est ignoré, pas refusé — le client
+reconstruit l'URL depuis `baseUrl.origin`.
 
-Forme de la réponse — à vérifier **une fois le 200 obtenu** :
+### 7.2 Le cache des lectures
 
-```bash
-curl -s \
-  -H "X-Site-Key: $MGS_SITE_KEY" \
-  -H "Authorization: Bearer $MGS_SITE_SECRET" \
-  "$MGS_PLATFORM_URL/api/v1/agency" \
-  | python3 -m json.tool | head -40
-```
+Les quatre lectures authentifiées (`/api/v1/agency`, `/api/v1/agency/requests`,
+`/api/v1/announcements`, `/api/v1/billing`) sont mises en cache côté serveur
+pendant `MGS_CACHE_REVALIDATE_S` secondes : 60 s par défaut, 300 s au maximum, 0
+pour ne jamais cacher (`client.ts:366-372`). L'étiquette `mgs-agence` porte ces
+lectures.
 
-Si les clés sont `agence`, `prestations`, `offres`, `abonnement`, `demandes` :
-l'API est saine, le problème est côté `space.ts`. Si les clés sont `name`,
-`whatsapp`, `offers` : vous interrogez une **ancienne version** de la plateforme.
+Un changement fait dans l'administration de la plateforme apparaît donc au pire
+après ce délai. Pour le rendre immédiat, la route `POST /api/agency/revalidate`
+purge l'étiquette et les chemins demandés (`purgerCacheAgence`,
+`lib/agency/space.ts:735-748`). Elle ne fait aucun appel à la plateforme et ne
+coûte rien au quota du site. Elle est réservée à l'administrateur du site et
+protégée par le contrôle d'origine (§5).
 
-Test de saturation (10 requêtes de plus, à faire une fois) :
+Ce délai est un filet de sécurité, pas la norme : c'est `revalidate` qui est le
+chemin normal après un changement côté plateforme.
 
-```bash
-for i in $(seq 1 10); do
-  curl -s -o /dev/null -w "$i : %{http_code}\n" \
-    -H "X-Site-Key: $MGS_SITE_KEY" \
-    -H "Authorization: Bearer $MGS_SITE_SECRET" \
-    "$MGS_PLATFORM_URL/api/v1/agency"
-done
-```
+### 7.3 Le silence est une dégradation, pas une panne
 
-Un `429` avant le 10ᵉ = le compteur était déjà proche de 60.
+`callAgency` ne lève jamais. Il renvoie `null` si la plateforme est injoignable,
+muette, en erreur, ou si une variable manque (`client.ts:153` et `client.ts:294`).
+Le site continue de fonctionner ; l'onglet « Mon agence » ne s'affiche pas.
+
+La conséquence pratique : l'absence d'un onglet ne prouve pas que la plateforme
+est en panne. Elle peut signifier que le site n'a jamais été configuré. La
+distinction se fait en comparant la sortie du script (hors ligne) et le test
+`--en-ligne`.
+
+### 7.4 Trois limites de débit, à ne pas confondre
+
+- **60 requêtes/minute par site** : appliquées en base par la fonction
+  `api_requete_admise` (migration `202609300002`). Un `429` ici vient de la
+  plateforme.
+- **5 appels par fenêtre de 60 s par session** : limiteur en mémoire du site
+  (`app/api/agency/_interne/limite.ts:38-41`), appliqué uniquement à
+  `POST /api/agency/request`. Un `429` ici vient du site, avec un en-tête
+  `Retry-After`.
+- **1 lecture par chemin, en fenêtre de 20 s** : après un `5xx` ou un `429`, le
+  chemin correspondant est court-circuité pendant 20 s (`client.ts:62, 353-355`).
+  Les autres chemins continuent. Un `503` sur `/api/v1/billing` ne dit donc pas
+  que `/api/v1/agency` est en panne — c'est même la raison pour laquelle la
+  mémoire d'échec est par chemin et non globale.
 
 ---
 
-## 7. Verdict par dépôt
+## 8. Par où commencer, dans l'ordre
 
-### `plateforme-mindgraphixsolution` — ⚠️ ne peut rien servir en l'état local
-
-**Marchera :** la logique d'authentification est correcte. `site-auth.ts:20`
-rejette bien une credential absente ou révoquée, `:24-29` compare le SHA-256 en
-temps constant avec `crypto.timingSafeEqual`, `:40` refuse un tenant NULL en 409,
-`:55` plafonne à 60/min, `:59` journalise, `:73` rafraîchit `last_seen_at`.
-Aucune de ces étapes ne ment.
-
-**Ne marchera pas localement :** `getAdminClient()` **lève** (§4), et aucune
-route `/api/v1/*` ne rattrape l'exception. Toutes les routes de l'agence
-renvoient 500.
-
-**Dépend d'une vérification que je ne peux pas faire :** sur Vercel, les deux
-variables sont peut-être correctement configurées. Vérifiez dans
-*plateforme-mindgraphixsolution → Settings → Environment Variables*. Le dossier
-`.vercel/` ne contient que `project.json`, il ne liste aucune variable.
-
-**Point de vigilance :** la sonde `/api/health` attend la migration
-`202609290014` alors que la 017 existe (§4). Ne pas s'en servir comme preuve.
-
-### `template-boutique-mgs` — ✗✗ aucune chance en l'état, 4 causes cumulées
-
-| Cause | Fichier:ligne | Effet |
-|---|---|---|
-| Pas de `.env.local` du tout | — | `client.ts:6` renvoie `null` sans appeler la plateforme |
-| Contrat plat | `space.ts:134-139` | nom, coordonnées, offres vides **sans erreur** |
-| `types.ts` ancien | `types.ts:47-53` (`agency`/`offers`/`announcements`/`billing`) | ni prestations, ni demandes, ni abonnement |
-| `contrat-partage.ts` absent | — | la version locale de `space.ts` n'a pas besoin de ses helpers, mais elle n'a pas non plus les règles de formatage partagées |
-
-S'y ajoute, dans la copie locale de `client.ts` :
-- **ligne 1-3** : les variables sont lues **au chargement du module**, pas à
-  chaque appel. En build Next, une variable absente au build reste `undefined`
-  pour toujours. Le connecteur a corrigé ce point (commentaire `client.ts:60-69`).
-- **ligne 36** : `revalidate: 300`. Cache de 5 minutes sur une boutique qui rend
-  beaucoup de pages — c'est aussi ce qui fait que **3 requêtes par chargement ×
-  onglets ouverts** peuvent rester invisibles en local.
-
-**Verdict :** même avec des variables parfaites, cet onglet afficherait un espace
-vide. Il faut recopiier `lib/agency/` depuis le connecteur, pas seulement créer
-un `.env.local`.
-
-### `site-vitrine-mindgraphixsolution` — ✗ mais **pour une raison entièrement différente**
-
-**Le site vitrine ne consomme pas l'espace « Mon agence ».** Vérifié :
-`grep -rn "callAgency|loadAgencySpace|api/v1/agency" site-vitrine-mindgraphixsolution`
-ne renvoie **aucune occurrence** (hors `node_modules`). Le dépôt n'a ni
-`lib/agency/` ni `components/agency/`.
-
-Ses coordonnées d'agence sont **en dur** dans `lib/agency-data.ts:11-28`
-(`agency.name`, `.phone`, `.whatsapp`, `.email`, hardcodés). Le fichier le dit
-lui-même lignes 4-8 : « Source de vérité du site vitrine. Si une information
-n'est pas confirmée en ligne, elle n'apparaît pas ici. »
-
-**Ce qui ne marche pas :** `app/api/leads/route.ts:32-37` lit `MGS_PLATFORM_URL`
-et renvoie 503 « La demande en ligne n'est pas encore reliée » si elle est
-absente. Or son `.env.local` **ne la contient pas**. Le formulaire de devis est donc
-coupé de la plateforme, et c'est le seul point de rupture réel.
-
-**Ce qui n'est PAS un défaut :** l'absence de `MGS_SITE_KEY` / `MGS_SITE_SECRET`.
-Le site vitrine n'appelle que `/api/v1/leads` (`leads/route.ts:42`), et cette
-route **n'exige aucune clé** — vérifié : `grep -c authenticateSite
-app/api/v1/leads/route.ts` → `0`. La cause 13 de la liste initiale est donc
-**invalide** pour ce dépôt : lui donner une clé de site serait inutile et
-introduirait un secret inutile.
-
-**Correction :** ajouter `MGS_PLATFORM_URL=https://<plateforme>` à son `.env.local`,
-et **retirer `MGS_PLATFORM_URL=http://localhost:3001` de son `.env.example`**
-(ligne 2), qui est un piège : le port `3001` ne correspond à rien.
-
----
-
-## 8. Les corrections, classées par impact ÷ effort
-
-### A. Variables d'environnement — 3 minutes par site, débloque tout
-
-**Aucun code à écrire.**
-
-```bash
-# 1. Créer les identifiants (plateforme) — À FAIRE UNE SEULE FOIS
-cd plateforme-mindgraphixsolution
-SUPABASE_SERVICE_ROLE_KEY=… NEXT_PUBLIC_SUPABASE_URL=… \
-  node scripts/create-site-credential.mjs "Nom de la boutique"
-# → affiche MGS_SITE_KEY=… et MGS_SITE_SECRET=…, UNE SEULE FOIS
-# → seul le SHA-256 du secret est stocké : le perdre oblige à régénérer
-
-# 2. Les écrire dans le site (jamais dans .env.example, jamais avec NEXT_PUBLIC_)
-cd ../template-boutique-mgs
-cat > .env.local <<'EOF'
-MGS_PLATFORM_URL=https://<plateforme-deployee>
-MGS_SITE_KEY=<colle>
-MGS_SITE_SECRET=<colle>
-MGS_CACHE_REVALIDATE_S=60
-MGS_AGENCY_NAME=MindGraphixSolution
-MGS_AGENCY_WHATSAPP=<numero>
-MGS_AGENCY_EMAIL=<adresse>
-EOF
-```
-
-Le filet `MGS_AGENCY_*` n'est pas cosmétique : sans lui, `space.ts:599` renvoie
-`null` et **l'onglet n'existe pas** tant que la plateforme ne répond pas.
-
-**Sur Vercel**, les mêmes trois variables dans *Settings → Environment Variables*,
-puis **redéploiement**. Un `.env.local` n'a aucun effet sur un déploiement Vercel.
-
-### B. Recopier `lib/agency/` dans le template — 2 minutes, supprime la cause 9
-
-```bash
-cp -r lib/agency/            ../template-boutique-mgs/lib/agency/
-cp -r components/agency/     ../template-boutique-mgs/components/agency/
-cp    components/agency.css  ../template-boutique-mgs/components/agency.css
-```
-
-À faire par l'Agent 1 (il corrige le contrat). Sans cela, A seul ne suffira pas.
-
-### C. Variables serveur de la plateforme — 2 minutes, sinon 500 partout
-
-Ajouter `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` au `.env.local`
-de la plateforme **si** elle tourne en local ; sinon vérifier le tableau de bord
-Vercel.
-
-### D. Migration 202609290017 — 1 minute si elle manque
-
-Appliquer `supabase/migrations/202609290017_agence_commune_et_bouton_flottant.sql`.
-Vérifier d'abord par `select * from public.derniere_migration();`.
-
-### E. Nettoyage du site vitrine — 1 minute
-
-Ajouter `MGS_PLATFORM_URL` à son `.env.local`, et supprimer la ligne
-`MGS_PLATFORM_URL=http://localhost:3001` de son `.env.example`.
-
-### F. Non traité ici, mais à signaler
-
-- `/api/health` attend `202609290014` au lieu de `202609290017` — la sonde ne peut
-  pas servir de preuve de fraîcheur de la base.
-- Aucune route de revalidation (`purgerCacheAgence` n'est appelé nulle part — vérifié
-  par grep dans le connecteur) : avec `revalidate: 300` dans le template, un
-  changement côté admin peut mettre 5 minutes à apparaître. Semble être « ça ne
-  marche pas » alors que ça marche.
-
----
-
-## 9. Le script
-
-`scripts/verifier-connexion.mjs` — sans dépendance, ne lance que du Node natif.
-
-```bash
-cd mgs-agency-connector
-
-node scripts/verifier-connexion.mjs                              # dépôt courant
-node scripts/verifier-connexion.mjs --site ../template-boutique-mgs
-node scripts/verifier-connexion.mjs --site ../template-boutique-mgs --en-ligne
-node scripts/verifier-connexion.mjs --url http://127.0.0.1:3000   # test du garde seul
-```
-
-Ce qu'il vérifie : présence des variables (sans afficher les valeurs), garde SSRF
-rejoué hors réseau à l'identique de `client.ts:80-89`, conformité du contrat,
-présence de la 017, cohérence de la sonde `/api/health`, et en `--en-ligne` la
-réponse réelle avec traduction de chaque statut HTTP.
-
-Ce qu'il ne fait pas : rien n'est écrit, aucun secret n'est affiché (au mieux 4
-caractères du SHA-256), aucun appel non-lecture, aucun accès à Supabase, aucune
-exécution de `create-site-credential.mjs`.
-
-Code de retour : `0` si tout va bien, `1` sinon — exploitable en CI.
-
----
-
-## 10. Par où commencer, dans l'ordre
-
-1. **`cd plateforme-mindgraphixsolution`**, vérifier `NEXT_PUBLIC_SUPABASE_URL` et
-   `SUPABASE_SERVICE_ROLE_KEY` (local **et** Vercel). Sans elles : 500 partout.
-2. **Lancer `scripts/create-site-credential.mjs`** et copier les deux lignes
-   affichées.
-3. **Écrire le `.env.local` du template** avec les trois variables, puis
-   **redémarrer** `next dev`.
-4. **Recopier `lib/agency/`** depuis le connecteur (Agent 1), sinon l'onglet reste
-   vide malgré des variables parfaites.
-5. **Lancer** `node scripts/verifier-connexion.mjs --site ../template-boutique-mgs --en-ligne`
-   et lire le verdict.
-6. **Si la plateforme tourne sur Vercel** : ajouter les trois variables au projet du
-   site, redéployer, recommencer au §5.
+1. **Hors ligne, sur le site client** :
+   `node scripts/verifier-connexion.mjs --site ../<votre-site>`.
+   Corriger ce qu'il signale avant toute autre chose.
+2. **En ligne**, si le hors ligne est propre :
+   `--en-ligne`. Un `200` avec `agence.identite` présent confirme la liaison.
+3. **Si le hors ligne et le en ligne sont propres, mais que l'onglet est
+   toujours absent ou vide** : lire la section 5 (rôle, session, origine) et les
+   journaux `[mgs-agency]` du site. Le problème est côté site, pas côté
+   plateforme.
+4. **En cas de `5xx` ou de `503`** : lire `/api/health` de la plateforme
+   (section 3) et la section 4.
+5. **En cas de doute sur la base** : jouer les trois requêtes SQL de la
+   section 6.

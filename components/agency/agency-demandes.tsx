@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useId, useRef, useState } from "react";
+
 import { LIBELLE_STATUT_INCONNU } from "@/lib/agency/contrat-partage";
 import type { DemandeAffiche, EvenementAffiche } from "@/lib/agency/types";
 import {
@@ -50,23 +52,64 @@ import {
 /** Nombre d'événements rendus par demande. `space.ts` plafonne déjà à 100. */
 const MAX_EVENEMENTS_AFFICHES = 24;
 
-/** Section complète. Une liste vide se dit, elle ne s'invente pas. */
-export function ListeDemandes({ demandes }: { demandes: DemandeAffiche[] | null | undefined }) {
+/** Route locale de réponse à un devis. Cf. `AgencyPanelProps.routeReponse`. */
+const ROUTE_REPONSE_DEFAUT = "/api/agency/requests/reponse";
+
+export type ListeDemandesProps = {
+  demandes: DemandeAffiche[] | null | undefined;
+  /** La plateforme n'a pas répondu : ne pas écrire « aucune demande ». */
+  indisponible?: boolean;
+  /** Préfixe d'identifiant du panneau. Voir `AgencyPanel`. */
+  suffixe?: string;
+  /** Route locale de réponse à un devis. */
+  routeReponse?: string | null;
+  /** Route de purge du cache, appelée après une réponse. */
+  routeRevalidation?: string | null;
+  /** Chemin du site revalidé après une réponse. */
+  cheminRevalidation?: string;
+};
+
+/**
+ * Section complète. Une liste vide se dit, elle ne s'invente pas.
+ *
+ * Le cas « liste vide » a deux Causes opposées, et l'écran doit les distinguer :
+ * « ce commerçant n'a rien demandé » — une information — et « la plateforme n'a
+ * pas répondu » — une panne. Les confondre affichait « Vous n'avez pas encore de
+ * demande » au moment précis où le composant ne savait rien, et le commerçant
+ * concluait que ses dossiers avaient disparu. `indisponible` porte cette
+ * distinction ; il n'est pas recalculé ici, il est lu dans `space.indisponibles`.
+ */
+export function ListeDemandes({
+  demandes,
+  indisponible = false,
+  suffixe = "",
+  routeReponse = ROUTE_REPONSE_DEFAUT,
+  routeRevalidation = null,
+  cheminRevalidation = "/",
+}: ListeDemandesProps) {
   const liste = Array.isArray(demandes) ? demandes : [];
+  const idTitre = suffixe === "" ? "agency-titre-demandes" : `agency-titre-demandes-${suffixe}`;
+  const reponse = useReponseDemande({ routeReponse, routeRevalidation, cheminRevalidation });
+
   return (
-    <section className="agency-section" aria-labelledby="agency-titre-demandes">
-      <h2 className="agency-section-titre" id="agency-titre-demandes">
+    <section className="agency-section" aria-labelledby={idTitre}>
+      <h2 className="agency-section-titre" id={idTitre}>
         Mes demandes
       </h2>
 
-      {liste.length === 0 ? (
+      {liste.length === 0 && indisponible ? (
+        <Mention ton="attention">
+          Vos demandes n’ont pas pu être consultées. Réessayez dans un instant : elles
+          n’ont pas disparu.
+        </Mention>
+      ) : liste.length === 0 ? (
         <p className="agency-section-intro">
           Vous n’avez pas encore de demande. Le formulaire plus bas en crée une.
         </p>
       ) : (
         <div className="agency-liste">
           {liste.map((demande) => (
-            <CarteDemande key={demande.id} demande={demande} />
+            <CarteDemande key={demande.id} demande={demande} reponse={reponse} />
           ))}
         </div>
       )}
@@ -74,8 +117,135 @@ export function ListeDemandes({ demandes }: { demandes: DemandeAffiche[] | null 
   );
 }
 
+/* ========================================================================== *
+ * Réponse à un devis : la partie que le commerçant actionne
+ * ========================================================================== */
+
+type Reponse = "accepte" | "refuse";
+
+type EtatReponse = {
+  /** Demande en cours de traitement, ou `null` si les boutons sont libres. */
+  occupee: string | null;
+  /** Demande dont on demande le motif de refus, ou `null` si la boîte est fermée. */
+  refusEnCours: string | null;
+  /** Message d'erreur à afficher sous les actions. */
+  erreur: string | null;
+};
+
+type ActionsReponse = {
+  /** Le client peut-il répondre ? Une demande terminale ne se répond plus. */
+  possible: boolean;
+  /** La réponse est-elle en cours d'enregistrement ? */
+  enCours: boolean;
+  /** Demande dont on demande le motif, ou `null` si la boîte est fermée. */
+  refusEnCours: string | null;
+  /** Message d'erreur à afficher sous les actions, ou `null`. */
+  erreur: string | null;
+  repondre: (id: string, reponse: Reponse, motif?: string) => Promise<void>;
+  ouvrirRefus: (id: string) => void;
+  fermerRefus: () => void;
+};
+
+/**
+ * L'état d'une réponse à un devis, et l'appel correspondant.
+ *
+ * Les deux actions n'existent que si la plateforme a proposé la réponse : la
+ * condition est `en_attente_client`, code que le contrat publie comme « En attente
+ * du client ». Une demande terminale — livrée, annulée, refusée — ne se répond
+ * plus, et le composant ne montre donc aucun bouton : un bouton qui échouerait
+ * serait pire que son absence.
+ *
+ * La purge du cache est le même appel OPT-IN que pour une nouvelle demande : le
+ * composant ne sait pas si le site a installé la route de revalidation, et un appel
+ * à une route absente ferait échouer la réponse alors qu'elle a été enregistrée.
+ * C'est pour cela que l'appel est isolé et que son échec est ignoré.
+ */
+function useReponseDemande({
+  routeReponse,
+  routeRevalidation,
+  cheminRevalidation,
+}: {
+  routeReponse: string | null;
+  routeRevalidation: string | null;
+  cheminRevalidation: string;
+}): ActionsReponse {
+  const [etat, setEtat] = useState<EtatReponse>({ occupee: null, refusEnCours: null, erreur: null });
+
+  async function repondre(id: string, reponse: Reponse, motif?: string) {
+    if (typeof routeReponse !== "string" || routeReponse === "") return;
+    setEtat({ occupee: id, refusEnCours: null, erreur: null });
+    try {
+      const reponseHttp = await fetch(routeReponse, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(motif === undefined ? { id, reponse } : { id, reponse, motif }),
+      });
+      const corps = (await reponseHttp.json().catch(() => null)) as { error?: unknown } | null;
+      if (!reponseHttp.ok) {
+        const message =
+          typeof corps?.error === "string" && corps.error.trim() !== ""
+            ? corps.error
+            : "Votre réponse n’a pas pu être enregistrée.";
+        setEtat({ occupee: null, refusEnCours: null, erreur: message });
+        return;
+      }
+      setEtat({ occupee: null, refusEnCours: null, erreur: null });
+      await revalider(routeRevalidation, cheminRevalidation);
+    } catch {
+      // Réseau coupé : on ne pretend pas que la décision est passée.
+      setEtat({
+        occupee: null,
+        refusEnCours: null,
+        erreur: "Votre réponse n’a pas pu être transmise. Vérifiez votre connexion.",
+      });
+    }
+  }
+
+  return {
+    possible: true,
+    enCours: etat.occupee !== null,
+    refusEnCours: etat.refusEnCours,
+    erreur: etat.erreur,
+    repondre,
+    ouvrirRefus: (id: string) => setEtat({ occupee: null, refusEnCours: id, erreur: null }),
+    fermerRefus: () => setEtat((actuel) => ({ ...actuel, refusEnCours: null })),
+  };
+}
+
+/**
+ * Purge du cache du site, si la route a été installée.
+ *
+ * `next: { revalidate: 0 }` : la réponse a été enregistrée, le panneau doit donc
+ * la refléter au prochain rendu. Un cache qui garde la liste d'avant ferait
+ * laisser le commerçant devant « En attente du client » juste après avoir
+ * accepté, ce qui est la version la plus coûteuse du bug — il appellerait l'agence
+ * pour dire qu'il a refusé un devis qu'il vient d'accepter.
+ *
+ * L'échec est IGNORÉ : la réponse est déjà enregistrée côté plateforme, et une
+ * route de revalidation absente ou en erreur ne doit pas se lire comme un échec
+ * de la réponse.
+ */
+async function revalider(route: string | null, chemin: string): Promise<void> {
+  if (typeof route !== "string" || route === "") return;
+  try {
+    await fetch(route, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chemins: [chemin] }),
+    });
+  } catch {
+    // Sans conséquence pour la réponse : elle est déjà enregistrée.
+  }
+}
+
 /** Une demande : son état, son prix, son paiement, puis son suivi. */
-function CarteDemande({ demande }: { demande: DemandeAffiche }) {
+function CarteDemande({
+  demande,
+  reponse,
+}: {
+  demande: DemandeAffiche;
+  reponse: ActionsReponse;
+}) {
   const objet = typeof demande.objet === "string" && demande.objet !== "" ? demande.objet : "";
   const prestation = typeof demande.prestation_libelle === "string" ? demande.prestation_libelle : "";
   const description = typeof demande.description === "string" ? demande.description : "";
@@ -125,8 +295,180 @@ function CarteDemande({ demande }: { demande: DemandeAffiche }) {
         </p>
       )}
 
+      {/* La réponse n'est proposée que là où la plateforme l'autorise : le code
+          `en_attente_client` signifie littéralement que la demande attend le
+          client. Une demande terminale n'a plus rien à répondre, et un bouton qui
+          échouerait serait pire que son absence. */}
+      {demande.statut === "en_attente_client" && reponse.possible && (
+        <ActionsDevis demande={demande} reponse={reponse} />
+      )}
+
       {evenements.length > 0 && <Chrono evenements={evenements} />}
     </article>
+  );
+}
+
+/**
+ * « Accepter le devis » et « Refuser le devis ».
+ *
+ * Le refus demande un motif, dans une boîte de dialogue qui rend le focus à son
+ * déclencheur — sans quoi un commerçant qui change d'avis perdrait le focus au
+ * milieu du panneau et ne reverrait plus où il se trouve.
+ *
+ * L'acceptation ne demande rien : accepter un devis sans avoir rien à ajouter est
+ * le cas ordinaire, et un formulaire à remplir serait un obstacle de plus sur le
+ * chemin le plus simple.
+ */
+function ActionsDevis({
+  demande,
+  reponse,
+}: {
+  demande: DemandeAffiche;
+  reponse: ActionsReponse;
+}) {
+  const enCours = reponse.enCours;
+
+  return (
+    <div className="agency-devis-actions">
+      <p className="agency-section-intro">
+        L’agence a chiffré cette demande et attend votre réponse. En l’acceptant,
+        vous acceptez le montant indiqué ci-dessus.
+      </p>
+
+      <div className="agency-actions">
+        <button
+          type="button"
+          className="agency-bouton agency-bouton--plein"
+          disabled={enCours}
+          onClick={() => void reponse.repondre(demande.id, "accepte")}
+        >
+          {enCours ? "Enregistrement…" : "Accepter le devis"}
+        </button>
+        <button
+          type="button"
+          className="agency-bouton agency-bouton--secondaire"
+          disabled={enCours}
+          onClick={() => reponse.ouvrirRefus(demande.id)}
+        >
+          Refuser le devis
+        </button>
+      </div>
+
+      {reponse.refusEnCours === demande.id && (
+        <BoiteRefus
+          demande={demande}
+          onAnnuler={() => reponse.fermerRefus()}
+          onConfirmer={(motif) => void reponse.repondre(demande.id, "refuse", motif)}
+        />
+      )}
+
+      {reponse.erreur !== null && (
+        <Mention ton="attention">
+          {reponse.erreur}
+        </Mention>
+      )}
+    </div>
+  );
+}
+
+/**
+ * La boîte de refus.
+ *
+ * `role="dialog"`, `aria-modal`, titre relié et `Échap` ferme : c'est le minimum
+ * pour qu'une boîte de dialogue soit navigable au clavier. Le focus entre dans le
+ * champ à l'ouverture et revient au bouton « Refuser le devis » à la fermeture —
+ * la personne qui annule retrouve l'endroit exact d'où elle a cliqué, ce qui
+ * compte quand le panneau contient plusieurs demandes.
+ *
+ * Le motif est obligatoire, parce que la plateforme l'exige : c'est l'agent qui
+ * doit pouvoir répondre au commerçant, et « je ne veux plus » ne le lui permet pas.
+ * La borne 280 caractères est celle de la plateforme.
+ */
+function BoiteRefus({
+  demande,
+  onAnnuler,
+  onConfirmer,
+}: {
+  demande: DemandeAffiche;
+  onAnnuler: () => void;
+  onConfirmer: (motif: string) => void;
+}) {
+  const idTitre = useId();
+  const idChamp = `${idTitre}-motif`;
+  const idAide = `${idTitre}-aide`;
+  const champRef = useRef<HTMLTextAreaElement>(null);
+  const [motif, setMotif] = useState("");
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    champRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function surTouche(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onAnnuler();
+      }
+    }
+    document.addEventListener("keydown", surTouche);
+    return () => document.removeEventListener("keydown", surTouche);
+  }, [onAnnuler]);
+
+  function confirmer() {
+    const propre = motif.replace(/\s+/g, " ").trim();
+    if (propre.length < 3) {
+      setErreur("Dites-nous pourquoi vous refusez, en quelques mots.");
+      champRef.current?.focus();
+      return;
+    }
+    setErreur(null);
+    onConfirmer(propre.slice(0, 280));
+  }
+
+  return (
+    <div className="agency-boite" role="dialog" aria-modal="true" aria-labelledby={idTitre}>
+      <h4 className="agency-boite-titre" id={idTitre}>
+        Refuser le devis de la demande {demande.reference}
+      </h4>
+      <p className="agency-boite-texte" id={idAide}>
+        Un mot à l’agence l’aide à vous répondre. Trois caractères suffisent.
+      </p>
+      <textarea
+        ref={champRef}
+        className="agency-champ"
+        id={idChamp}
+        rows={3}
+        value={motif}
+        maxLength={280}
+        onChange={(event) => setMotif(event.target.value)}
+        aria-describedby={erreur === null ? idAide : `${idAide} ${idAide}-erreur`}
+        aria-invalid={erreur !== null}
+        placeholder="Je ne souhaite plus cette prestation…"
+      />
+      {erreur !== null && (
+        <p className="agency-erreur" id={`${idAide}-erreur`} role="alert">
+          {erreur}
+        </p>
+      )}
+
+      <div className="agency-actions">
+        <button
+          type="button"
+          className="agency-bouton agency-bouton--plein"
+          onClick={confirmer}
+        >
+          Refuser et envoyer
+        </button>
+        <button
+          type="button"
+          className="agency-bouton agency-bouton--secondaire"
+          onClick={onAnnuler}
+        >
+          Annuler
+        </button>
+      </div>
+    </div>
   );
 }
 
