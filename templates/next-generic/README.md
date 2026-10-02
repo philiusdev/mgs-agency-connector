@@ -12,6 +12,11 @@ contient la ou les adresses autorisées, séparées par des virgules. Côté
 plateforme, chaque site Vercel reçoit sa propre liste. Le premier compte admin
 doit être invité dans Supabase Auth avant la connexion.
 
+Le lien e-mail passe par le relais fixe `MGS_PLATFORM_URL/auth/site-callback`.
+MGS retrouve l'adresse HTTPS depuis l'identifiant `MGS_SITE_ID` en base, puis
+redirige le code vers `/auth/callback` du site. Cette méthode n'exige ni jeton
+Supabase Management ni allow-list wildcard sur `*.vercel.app`.
+
 ## Variables du projet
 
 Copiez `.env.example` dans `.env.local` pour le développement local. En

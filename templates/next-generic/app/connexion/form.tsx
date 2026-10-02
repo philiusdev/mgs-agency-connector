@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
-export function ConnexionForm() {
+export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; siteId: string }) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [etape, setEtape] = useState<"email" | "code">("email");
@@ -21,13 +21,20 @@ export function ConnexionForm() {
       setEnvoi(false);
       return;
     }
+    if (!platformUrl || !/^[0-9a-f-]{36}$/i.test(siteId)) {
+      setMessage("Le relais sécurisé d’authentification n’est pas configuré pour ce site.");
+      setEnvoi(false);
+      return;
+    }
     const supabase = createBrowserClient(url, key);
     try {
+      const callback = new URL("/auth/site-callback", platformUrl);
+      callback.searchParams.set("site_id", siteId);
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim().toLowerCase(),
         options: {
           shouldCreateUser: false,
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/callback?next=%2Fadmin`,
+          emailRedirectTo: callback.toString(),
         },
       });
       if (error) throw error;
