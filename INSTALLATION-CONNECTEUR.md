@@ -1,8 +1,13 @@
 # Installer le connecteur MindGraphixSolution sur un site client
 
-Ce guide explique comment brancher le connecteur sur un **nouveau site client**.
+Ce guide explique comment intégrer le connecteur à un projet de site client déjà créé.
 Il ne concerne que le **Système A** (le lien boutique ↔ agence). Il ne dit rien
 du MGS Account, qui est un système totally séparé.
+
+**Installer ou copier le connecteur ne crée pas un site client.** Il ne crée ni
+tenant/site dans la plateforme, ni projet client, ni compte ou profil
+administrateur, ni variables d’environnement, ni déploiement. Ces opérations
+sont distinctes et doivent être terminées explicitement.
 
 Un site **déjà branché** et encore monté sur une page accessible au commerçant
 connecté est traité au [chapitre 13](#13-migrer-un-site-déjà-branché-vers-larchitecture-admin).
@@ -94,9 +99,13 @@ s'affiche jamais.
 
 ---
 
-## 3. Créer les identifiants du site
+## 3. Provisionner le client et créer ses identifiants
 
-Depuis le dossier de la **plateforme MGS** (`plateforme-mindgraphixsolution`) :
+Dans le tableau de bord administrateur MGS, onglet **Clients & sites**, utilisez
+**Provisionner un client et son site**. Choisissez le type du site, indiquez son
+URL si elle existe, puis sélectionnez éventuellement un forfait compatible.
+Cette action crée un nouvel espace client et un nouvel enregistrement de site ;
+elle ne réutilise jamais le premier site d’un client existant.
 
 ```bash
 SUPABASE_SERVICE_ROLE_KEY=… NEXT_PUBLIC_SUPABASE_URL=… \
@@ -110,11 +119,22 @@ MGS_SITE_KEY=mgs_xxxxxxxxxxxx
 MGS_SITE_SECRET=xxxxxxxxxxxxxxxx
 ```
 
-> **Copiez-les immédiatement.** Seul le hash du secret est stocké en base.
-> Si vous le perdez, relancez le script : l'ancien identifiant est révoqué
-> automatiquement et le site continue de fonctionner avec le nouveau.
+> **Copiez-les immédiatement dans les secrets privés du projet client.** Seul
+> le hash du secret est stocké sur la plateforme. Le tableau de bord ne peut pas
+> réafficher le secret. Pour le remplacer, utilisez **Renouveler les clés** sur
+> la ligne du site dans le tableau de bord : la nouvelle clé s’affiche une fois
+> et les anciennes sont révoquées dans la même opération.
 
-Le script crée aussi la boutique (`tenants`) et le site (`sites`) s'ils n'existent pas.
+Le connecteur seul ne peut ni placer ces variables dans votre projet, ni créer
+son compte administrateur. Ces opérations restent à effectuer dans le projet
+client et son hébergeur.
+
+Pour les opérations CLI historiques, le script
+`plateforme-mindgraphixsolution/scripts/create-site-credential.mjs` peut créer
+un nouvel espace et site, mais refuse un identifiant client déjà existant afin
+de ne jamais rattacher accidentellement une nouvelle installation à un ancien
+site. Le tableau de bord est la voie recommandée : il permet aussi de saisir
+catégorie, URL et forfait compatible.
 
 ---
 
@@ -278,7 +298,7 @@ lui-même : c'est votre page qui décide à qui elle rend l'espace.
 
 ## 6. Les variables d'environnement
 
-Ajoutez dans `.env.local` du site client, **puis dans les variables du serveur
+Après le provisionnement et la copie des identifiants, ajoutez dans `.env.local` du site client, **puis dans les variables du serveur
 de production** (Vercel, Railway, votre hébergeur) :
 
 ```env
