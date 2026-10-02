@@ -9,6 +9,19 @@ tenant/site dans la plateforme, ni projet client, ni compte ou profil
 administrateur, ni variables d’environnement, ni déploiement. Ces opérations
 sont distinctes et doivent être terminées explicitement.
 
+Pour un site web **Next.js générique**, la console MGS peut automatiser ces
+opérations lorsqu’elle est configurée : espace/site, dépôt GitHub privé à
+partir du gabarit, projet Vercel, variables serveur, URL Auth Supabase exacte
+et invitation du premier administrateur. Le nom du site sert de nom au dépôt,
+au projet Vercel et au sous-domaine `.vercel.app` ; aucune URL publique à
+connaître à l’avance n’est demandée. Le contenu reste un gabarit générique, à
+personnaliser ensuite. Les domaines personnalisés se branchent dans Vercel.
+
+Les applications mobiles ne sont pas générées par ce gabarit Next.js.
+L’automatisation nécessite aussi les secrets GitHub, Vercel et Supabase
+Management côté serveur de la plateforme MGS ; voir la documentation
+[Créer un projet client automatiquement](https://github.com/philiusdev/plateforme-mindgraphixsolution/blob/master/docs/CREATION-PROJETS-CLIENTS.md).
+
 Un site **déjà branché** et encore monté sur une page accessible au commerçant
 connecté est traité au [chapitre 13](#13-migrer-un-site-déjà-branché-vers-larchitecture-admin).
 
