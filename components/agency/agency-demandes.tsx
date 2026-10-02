@@ -10,6 +10,7 @@ import {
   PastilleStatut,
   jetonDemande,
 } from "./agency-commun";
+import { MessagesDemande } from "./agency-messages";
 
 /**
  * Section « Mes demandes » : l'historique du commerçant et le suivi de chaque
@@ -294,6 +295,8 @@ function CarteDemande({
           {descriptionService}
         </p>
       )}
+
+      <MessagesDemande demandeId={demande.id} />
 
       {/* La réponse n'est proposée que là où la plateforme l'autorise : le code
           `en_attente_client` signifie littéralement que la demande attend le

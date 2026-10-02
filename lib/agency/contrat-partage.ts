@@ -148,6 +148,8 @@ export const MESSAGE_DEMANDE_ENVOYEE =
  */
 export const MESSAGE_DEMANDE_ENVOYEE_INCLUSE =
   "Votre demande a bien été envoyée. Elle est incluse : l’agence la prend en charge, et vous n’avez pas de devis à attendre.";
+export const MESSAGE_FORMATION_INITIALE_INCLUSE =
+  "Votre formation initiale est incluse après l’achat payé de ce site. L’agence vous contactera pour la planifier.";
 
 /* ========================================================================= *
  * 2. Vocabulaires fermes
@@ -264,12 +266,12 @@ export const COLONNES_BOUTON_FLOTTANT =
   "bouton_flottant_position,bouton_flottant_urgence";
 
 export const COLONNES_OFFRE =
-  "id,title,description,whatsapp_message,active,display_order,created_at";
+  "id,title,description,whatsapp_message,price_cents,billing_mode,active,display_order,created_at";
 
 /** `billing_plan_id` est ajoute par la migration 202609290017. */
 export const COLONNES_PRESTATION =
   "id,tenant_id,code,title,description,price_cents,currency,is_free,billing_plan_id," +
-  "turnaround_hours,is_active,sort_order,created_at";
+  "is_site_creation,is_training,turnaround_hours,is_active,sort_order,created_at";
 
 /**
  * `service_libelle` et `service_code` sont ajoutes par la migration 202609290017.
@@ -284,9 +286,10 @@ export const COLONNES_PRESTATION =
 export const COLONNES_DEMANDE =
   "id,tenant_id,service_id,service_libelle,service_code,site_id,requester_user_id," +
   "requester_name,requester_email,requester_phone," +
-  "subject,description,status,quoted_price_cents,currency,is_paid,due_at,paid_at,created_at,updated_at," +
+  "subject,description,status,quoted_price_cents,currency,is_paid,due_at,paid_at," +
+  "site_creation_purchase,formation_initiale_incluse,created_at,updated_at," +
   "service:agency_services(id,code,title,description,is_free,price_cents,currency," +
-  "billing_plan_id,turnaround_hours)";
+  "billing_plan_id,is_site_creation,is_training,turnaround_hours)";
 
 /**
  * La meme demande, lue par la file de l'agence.
@@ -306,7 +309,8 @@ export const COLONNES_DEMANDE =
  */
 export const COLONNES_DEMANDE_AGENT =
   "id,tenant_id,service_id,site_id,requester_user_id,requester_name,requester_email,requester_phone," +
-  "subject,description,status,quoted_price_cents,currency,is_paid,due_at,paid_at,created_at,updated_at," +
+  "subject,description,status,quoted_price_cents,currency,is_paid,due_at,paid_at," +
+  "site_creation_purchase,formation_initiale_incluse,created_at,updated_at," +
   "service:agency_services(id,code,title,is_free,price_cents,currency,turnaround_hours)";
 
 export const COLONNES_EVENEMENT =
@@ -391,6 +395,8 @@ export type LigneOffre = {
   title: string;
   description: string;
   whatsapp_message: string;
+  price_cents: number | null;
+  billing_mode: "quote" | "fixed_once" | "initial_included_then_paid";
   active: boolean;
   display_order: number;
   created_at: string;
@@ -419,6 +425,10 @@ export type LigneService = {
   is_free: boolean;
   /** Abonnement couvrant la prestation, ou NULL si elle se facture seule. */
   billing_plan_id?: string | null;
+  /** Cette prestation correspond à l'achat de création d'un site. */
+  is_site_creation: boolean;
+  /** Formation de gestion : droit initial après achat payé, renouvellement payant. */
+  is_training: boolean;
   /** Delai indicatif en heures, NULL pour une prestation sur rendez-vous. */
   turnaround_hours: number | null;
   is_active: boolean;
@@ -464,6 +474,8 @@ export type LigneDemande = {
   is_paid: boolean;
   due_at: string | null;
   paid_at: string | null;
+  site_creation_purchase: boolean;
+  formation_initiale_incluse: boolean;
   created_at: string;
   updated_at: string;
   service?: LigneService | LigneService[] | null;
@@ -657,6 +669,7 @@ export type OffreAffiche = {
   titre: string;
   description: string | null;
   message_whatsapp: string;
+  prix_libelle: string;
   active: boolean;
   ordre: number;
   lien_whatsapp: string | null;
@@ -714,6 +727,10 @@ export type PrestationAffiche = {
   couverture_abonnement: boolean;
   /** « Inclus dans votre abonnement », ou `null` si le lecteur ne la couvre pas. */
   couverture_libelle: string | null;
+  /** Achat de création de site, qui peut ouvrir un droit de formation. */
+  achat_creation_site: boolean;
+  /** Formation de gestion, avec premier droit conditionné au paiement du site. */
+  formation_gestion: boolean;
   delai_heures: number | null;
   delai_libelle: string | null;
   active: boolean;
@@ -771,6 +788,8 @@ export type DemandeAffiche = {
   couverture_abonnement: boolean;
   /** « Inclus dans votre abonnement », ou `null` si ce n'est pas couvert. */
   couverture_libelle: string | null;
+  /** La demande consomme le droit unique de formation initiale de ce site. */
+  formation_initiale_incluse: boolean;
   /**
    * Toujours renseigne : la demande reste lisible sans sa prestation. Le
    * libelle recopie sur la demande passe avant le titre de la prestation
@@ -1658,11 +1677,22 @@ export function presenterIdentite(
  */
 export function presenterOffre(ligne: LigneOffre, numero?: string | null): OffreAffiche {
   const message = texteLong(ligne?.whatsapp_message, 500);
+  const prix = entier(ligne?.price_cents);
+  const mode = ligne?.billing_mode;
+  const prixLibelle =
+    mode === "initial_included_then_paid"
+      ? prix
+        ? `Formation initiale incluse après paiement de la création du site · renouvellement : ${new Intl.NumberFormat("fr-FR").format(prix / 100)} F CFA`
+        : "Formation initiale incluse après paiement de la création du site · renouvellement sur devis"
+      : mode === "fixed_once" && prix
+        ? `${new Intl.NumberFormat("fr-FR").format(prix / 100)} F CFA`
+        : "Prestation payante · sur devis";
   return {
     id: texte(ligne?.id, 64),
     titre: texte(ligne?.title, 120) || LIBELLE_OFFRE_INCONNUE,
     description: texteLong(ligne?.description, 280) || null,
     message_whatsapp: message,
+    prix_libelle: prixLibelle,
     active: ligne?.active === true,
     ordre: entier(ligne?.display_order) ?? 0,
     lien_whatsapp: lienWhatsapp(numero, message),
@@ -1706,6 +1736,8 @@ export function presenterPrestation(
     couverte_par_abonnement: couverte,
     couverture_abonnement: couverture,
     couverture_libelle: couverture ? LIBELLE_PRESTATION_COUVERTE : null,
+    achat_creation_site: ligne?.is_site_creation === true,
+    formation_gestion: ligne?.is_training === true,
     delai_heures: entier(ligne?.turnaround_hours),
     delai_libelle: formaterDelai(ligne?.turnaround_hours),
     active: ligne?.is_active !== false,
@@ -1897,6 +1929,7 @@ export function presenterDemande(
     service: service === null ? null : presenterPrestation(service, abonnement, maintenantDate),
     couverture_abonnement: couverture,
     couverture_libelle: couverture ? LIBELLE_PRESTATION_COUVERTE : null,
+    formation_initiale_incluse: ligne?.formation_initiale_incluse === true,
     // Le libelle recopie sur la demande l'emporte sur le titre de la
     // prestation jointee : il dit ce que le client a demande ce jour-la, et il
     // survit a la sortie de la prestation du catalogue.
@@ -2049,6 +2082,9 @@ export function decrireConfirmationDemande(
   abonnement?: LigneAbonnement | null,
   maintenant?: Date | number | string | null,
 ): string {
+  if (demande.formation_initiale_incluse === true) {
+    return MESSAGE_FORMATION_INITIALE_INCLUSE;
+  }
   return estPrestationCouverte(lienService(demande), abonnement, maintenant)
     ? MESSAGE_DEMANDE_ENVOYEE_INCLUSE
     : MESSAGE_DEMANDE_ENVOYEE;

@@ -777,6 +777,12 @@ function SectionPrestations({
             {prestation.description && (
               <p className="agency-prestation-texte">{prestation.description}</p>
             )}
+            {prestation.formation_gestion && (
+              <p className="agency-prestation-meta">
+                Première formation incluse une fois après paiement de la création de ce site ;
+                le tarif affiché s’applique aux renouvellements.
+              </p>
+            )}
 
             <p className="agency-prestation-meta">
               {prestation.delai_libelle ? (
@@ -900,6 +906,7 @@ function SectionOffres({
             <article className="agency-card agency-offre" key={offre.id}>
               <h3 className="agency-card-titre">{offre.titre}</h3>
               {offre.description && <p className="agency-card-texte">{offre.description}</p>}
+              <p className="agency-card-pied">{offre.prix_libelle}</p>
               {lien && (
                 <a
                   className="agency-bouton agency-bouton--secondaire"

@@ -22,6 +22,7 @@ pas-à-pas pour installer le connecteur sur un nouveau site client.
 | `components/agency/AgencyCredit.tsx` | Crédit « Site créé par MindGraphixSolution » (Server Component) |
 | `components/agency/AgencyBillingBanner.tsx` | Bandeau de facturation en haut du dashboard |
 | `components/agency/AgencyPanel.tsx` | Onglet « Mon agence » (contacts, annonces, demande, offres) |
+| `components/agency/agency-messages.tsx` | Conversation client ↔ agence par demande |
 | `components/agency/AgencyFloatingButton.tsx` | Bouton flottant et panneau, à monter sur une page réservée aux administrateurs |
 | `components/agency.css` | Styles de l'onglet, préfixés `agency-` pour ne rien écraser |
 | `app/api/agency/_interne/securite.ts` | Contrôles communs aux cinq routes d'agence : session, rôle, origine. Seul fichier qui dépend de l'auth du site |
@@ -30,6 +31,7 @@ pas-à-pas pour installer le connecteur sur un nouveau site client.
 | `app/api/agency/request/route.ts` | Transmet la demande d'amélioration vers la plateforme |
 | `app/api/agency/requests/route.ts` | Relecte des demandes à la demande, pour un panneau frais (admin du site) |
 | `app/api/agency/requests/reponse/route.ts` | Réponse du commerçant à un devis : acceptation ou refus (admin du site) |
+| `app/api/agency/requests/[id]/messages/route.ts` | Lecture et envoi de messages, réservés à l'administration du site |
 | `app/api/agency/revalidate/route.ts` | Purge immédiate du cache « Mon agence » après un changement côté plateforme |
 | `app/api/health/route.ts` | Sonde du SITE : « le site répond-il ? ». N'appelle pas la plateforme et ne dit rien de la connexion |
 | `scripts/verifier-connexion.mjs` | Diagnostic de la chaîne site ↔ plateforme, hors ligne et en ligne (lecture seule) |

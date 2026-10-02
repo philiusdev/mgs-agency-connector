@@ -173,6 +173,7 @@ export function FormulaireNouvelleDemande({
     () => (Array.isArray(prestations) ? prestations : []).filter((p) => p && estUuid(p.id)),
     [prestations],
   );
+  const prestationChoisie = catalogue.find((prestation) => prestation.id === serviceId) ?? null;
 
   const revalider = useCallback(() => {
     // Purge du cache, sans être attendue et sans jamais faire échouer l'envoi :
@@ -428,11 +429,14 @@ export function FormulaireNouvelleDemande({
               <option key={prestation.id} value={prestation.id}>
                 {prestation.titre}
                 {prestation.prix?.libelle ? ` — ${prestation.prix.libelle}` : ""}
+                {prestation.formation_gestion ? " — formation initiale incluse sous condition" : ""}
               </option>
             ))}
           </select>
           <p className="agency-aide" id={cid("aide-service_id")}>
-            Seules les prestations publiées par l’agence peuvent être demandées.
+            {prestationChoisie?.formation_gestion
+              ? "La première formation est incluse une fois après paiement de la création de ce site. Sinon, le tarif de renouvellement s’applique ; l’agence confirme la règle après votre demande."
+              : "Seules les prestations publiées par l’agence peuvent être demandées."}
           </p>
           <MessageChamp id={cid("erreur-service_id")} texte={messages.service_id} />
         </div>

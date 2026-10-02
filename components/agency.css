@@ -905,6 +905,69 @@
 
 .agency-devis-actions .agency-section-intro { margin: 0; }
 
+.agency-messages {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.agency-messages-contenu {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--mgs-line);
+  border-radius: var(--mgs-radius);
+  background: var(--mgs-surface-2);
+}
+
+.agency-messages-titre {
+  margin: 0;
+  font-size: 14px;
+}
+
+.agency-messages-liste {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agency-message {
+  max-width: min(90%, 560px);
+  padding: 10px 12px;
+  border: 1px solid var(--mgs-line);
+  border-radius: var(--mgs-radius);
+  background: var(--mgs-surface);
+}
+
+.agency-message--client { justify-self: end; }
+.agency-message--agent { justify-self: start; }
+.agency-message--system { justify-self: center; }
+
+.agency-message-texte {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agency-message small { color: var(--mgs-muted); }
+
+.agency-messages-formulaire {
+  display: grid;
+  gap: 8px;
+}
+
+.agency-messages-erreur,
+.agency-messages-avertissement {
+  margin: 0;
+  color: var(--mgs-danger, #b42318);
+}
+
+.agency-messages-avertissement { color: var(--mgs-warning, #8a5a00); }
+
 /* Les deux boutons côte à côte sur large, empilés sur étroit : à 320 px deux
  * boutons de texte long ne tiennent plus et se tronquent l'un l'autre. */
 .agency-actions { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -80,6 +80,8 @@ export type AgencyFloatingButtonProps = {
   routeRevalidation?: string | null;
   /** Chemin du site revalidé après un envoi. Par défaut `/`. */
   cheminRevalidation?: string;
+  /** Remplace le texte du bouton sans changer celui des autres sites clients. */
+  libelleBouton?: string;
 };
 
 /** Cible de la touche Tab, dans l'ordre du document. */
@@ -93,6 +95,7 @@ export function AgencyFloatingButton({
   routeDemande,
   routeRevalidation,
   cheminRevalidation,
+  libelleBouton,
 }: AgencyFloatingButtonProps) {
   const [ouvert, setOuvert] = useState(false);
   const [bulleFermee, setBulleFermee] = useState(false);
@@ -104,6 +107,7 @@ export function AgencyFloatingButton({
   // Décision du contrat, lue sans jamais être recalculée : voir le bandeau.
   const bouton = space?.identite?.bouton_flottant;
   const visible = space !== null && bouton !== undefined && bouton.visible === true;
+  const texteBouton = libelleBouton?.trim() || bouton?.libelle || "Nous contacter";
 
   const fermer = useCallback(() => setOuvert(false), []);
   const ouvrir = useCallback(() => setOuvert(true), []);
@@ -228,13 +232,13 @@ export function AgencyFloatingButton({
         className={`agency-bouton-flottant${marque ? " agency-bouton-flottant--marque" : ""}`}
         aria-expanded={ouvert}
         aria-controls={identifiantPanneau}
-        aria-label={composerLibelleAccessibleBouton(bouton.libelle, bouton.libelle_accessible)}
+        aria-label={composerLibelleAccessibleBouton(texteBouton, bouton.libelle_accessible)}
         onClick={ouvrir}
       >
         <span className="agency-bouton-flottant-icone" aria-hidden="true">
           ✆
         </span>
-        <span className="agency-bouton-flottant-texte">{bouton.libelle}</span>
+        <span className="agency-bouton-flottant-texte">{texteBouton}</span>
       </button>
 
       {ouvert && (

@@ -131,6 +131,11 @@ cp    app/api/agency/        <projet-client>/app/api/agency/
 cp    app/api/health/        <projet-client>/app/api/health/          # si absent
 ```
 
+Les échanges de messages sont fournis par `components/agency/agency-messages.tsx`
+et `app/api/agency/requests/[id]/messages/route.ts`. Ils exigent une session
+d'administration du site, passent par le secret serveur du connecteur et
+restreignent la conversation à la demande de ce site.
+
 Si le projet utilise `src/`, prependez `src/` aux chemins de destination.
 
 > ⚠️ `app/api/agency/_interne/securite.ts` importe `@/lib/supabase/server` et lit la
