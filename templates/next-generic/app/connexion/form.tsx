@@ -30,19 +30,30 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
     try {
       const callback = new URL("/auth/site-callback", platformUrl);
       callback.searchParams.set("site_id", siteId);
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: callback.toString(),
+      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+        "auth-email-start",
+        {
+          body: {
+            brand: "mgs",
+            siteId,
+            email: email.trim().toLowerCase(),
+            emailRedirectTo: callback.toString(),
+          },
         },
-      });
-      if (error) throw error;
+      );
+      if (error) {
+        const context = error.context;
+        const result = context instanceof Response
+          ? await context.clone().json().catch(() => null) as { error?: string } | null
+          : null;
+        throw new Error(result?.error ?? "Impossible d’envoyer le message.");
+      }
+      if (!data?.ok) throw new Error(data?.error ?? "Impossible d’envoyer le message.");
       setEtape("code");
       setMessage("Un code à usage unique et un lien de connexion ont été envoyés par e-mail.");
     } catch (error) {
       console.error("[site-auth] Echec de demande de connexion.", error);
-      setMessage("Connexion impossible. Vérifiez que l’adresse a été invitée comme administratrice.");
+      setMessage(error instanceof Error ? error.message : "Connexion impossible. Vérifiez que l’adresse a été invitée comme administratrice.");
     } finally {
       setEnvoi(false);
     }
@@ -64,7 +75,7 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
       const { error } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token: code.trim(),
-        type: "email",
+        type: "magiclink",
       });
       if (error) throw error;
       window.location.assign("/admin");
