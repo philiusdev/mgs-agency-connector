@@ -30,7 +30,7 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
     try {
       const callback = new URL("/auth/site-callback", platformUrl);
       callback.searchParams.set("site_id", siteId);
-      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string }>(
+      const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string; delivery?: string }>(
         "auth-email-start",
         {
           body: {
@@ -38,6 +38,7 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
             siteId,
             email: email.trim().toLowerCase(),
             emailRedirectTo: callback.toString(),
+            clientSendsEmail: true,
           },
         },
       );
@@ -49,6 +50,15 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
         throw new Error(result?.error ?? "Impossible d’envoyer le message.");
       }
       if (!data?.ok) throw new Error(data?.error ?? "Impossible d’envoyer le message.");
+      if (data.delivery === "supabase_auth_smtp") {
+        const { error: sendError } = await supabase.auth.signInWithOtp({
+          email: email.trim().toLowerCase(),
+          options: { shouldCreateUser: false, emailRedirectTo: callback.toString() },
+        });
+        if (sendError) throw sendError;
+      } else if (data.delivery !== undefined) {
+        throw new Error("Le service de connexion a renvoyé une réponse inattendue.");
+      }
       setEtape("code");
       setMessage("Un code à usage unique et un lien de connexion ont été envoyés par e-mail.");
     } catch (error) {
@@ -72,11 +82,15 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
     }
     try {
       const supabase = createBrowserClient(url, key);
-      const { error } = await supabase.auth.verifyOtp({
+      const otp = {
         email: email.trim().toLowerCase(),
         token: code.trim(),
-        type: "magiclink",
-      });
+      };
+      let verification = await supabase.auth.verifyOtp({ ...otp, type: "email" });
+      if (verification.error) {
+        verification = await supabase.auth.verifyOtp({ ...otp, type: "magiclink" });
+      }
+      const { error } = verification;
       if (error) throw error;
       window.location.assign("/admin");
     } catch (error) {
