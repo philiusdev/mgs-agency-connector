@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { LIBELLE_STATUT_INCONNU } from "@/lib/agency/contrat-partage";
 import type { DemandeAffiche, EvenementAffiche } from "@/lib/agency/types";
@@ -123,6 +124,7 @@ export function ListeDemandes({
  * ========================================================================== */
 
 type Reponse = "accepte" | "refuse";
+type DecisionLocale = Reponse | "actualisation";
 
 type EtatReponse = {
   /** Demande en cours de traitement, ou `null` si les boutons sont libres. */
@@ -142,6 +144,8 @@ type ActionsReponse = {
   refusEnCours: string | null;
   /** Message d'erreur à afficher sous les actions, ou `null`. */
   erreur: string | null;
+  /** Décisions déjà enregistrées pendant que les données du serveur se rafraîchissent. */
+  decisionsLocales: Readonly<Record<string, DecisionLocale>>;
   repondre: (id: string, reponse: Reponse, motif?: string) => Promise<void>;
   ouvrirRefus: (id: string) => void;
   fermerRefus: () => void;
@@ -171,6 +175,8 @@ function useReponseDemande({
   cheminRevalidation: string;
 }): ActionsReponse {
   const [etat, setEtat] = useState<EtatReponse>({ occupee: null, refusEnCours: null, erreur: null });
+  const [decisionsLocales, setDecisionsLocales] = useState<Record<string, DecisionLocale>>({});
+  const routeur = useRouter();
 
   async function repondre(id: string, reponse: Reponse, motif?: string) {
     if (typeof routeReponse !== "string" || routeReponse === "") return;
@@ -188,10 +194,17 @@ function useReponseDemande({
             ? corps.error
             : "Votre réponse n’a pas pu être enregistrée.";
         setEtat({ occupee: null, refusEnCours: null, erreur: message });
+        if (reponseHttp.status === 409) {
+          setDecisionsLocales((actuelles) => ({ ...actuelles, [id]: "actualisation" }));
+          await revalider(routeRevalidation, cheminRevalidation);
+          routeur.refresh();
+        }
         return;
       }
+      setDecisionsLocales((actuelles) => ({ ...actuelles, [id]: reponse }));
       setEtat({ occupee: null, refusEnCours: null, erreur: null });
       await revalider(routeRevalidation, cheminRevalidation);
+      routeur.refresh();
     } catch {
       // Réseau coupé : on ne pretend pas que la décision est passée.
       setEtat({
@@ -207,6 +220,7 @@ function useReponseDemande({
     enCours: etat.occupee !== null,
     refusEnCours: etat.refusEnCours,
     erreur: etat.erreur,
+    decisionsLocales,
     repondre,
     ouvrirRefus: (id: string) => setEtat({ occupee: null, refusEnCours: id, erreur: null }),
     fermerRefus: () => setEtat((actuel) => ({ ...actuel, refusEnCours: null })),
@@ -256,6 +270,7 @@ function CarteDemande({
   const descriptionService =
     typeof demande.service?.description === "string" ? demande.service.description : "";
   const evenements = Array.isArray(demande.evenements) ? demande.evenements : [];
+  const decisionLocale = reponse.decisionsLocales[demande.id];
 
   return (
     <article className="agency-demande">
@@ -298,11 +313,30 @@ function CarteDemande({
 
       <MessagesDemande demandeId={demande.id} />
 
+      {decisionLocale === "accepte" && (
+        <p className="agency-mention" role="status" aria-live="polite">
+          Votre acceptation a été enregistrée. Le statut de la demande est en cours
+          d’actualisation.
+        </p>
+      )}
+      {decisionLocale === "refuse" && (
+        <p className="agency-mention" role="status" aria-live="polite">
+          Votre refus a été enregistré. Le statut de la demande est en cours
+          d’actualisation.
+        </p>
+      )}
+      {decisionLocale === "actualisation" && (
+        <p className="agency-mention agency-mention--attention" role="status" aria-live="polite">
+          Cette demande a évolué depuis son affichage. Son état est en cours de
+          relecture ; ne renvoyez pas votre réponse.
+        </p>
+      )}
+
       {/* La réponse n'est proposée que là où la plateforme l'autorise : le code
           `en_attente_client` signifie littéralement que la demande attend le
           client. Une demande terminale n'a plus rien à répondre, et un bouton qui
           échouerait serait pire que son absence. */}
-      {demande.statut === "en_attente_client" && reponse.possible && (
+      {demande.statut === "en_attente_client" && reponse.possible && !decisionLocale && (
         <ActionsDevis demande={demande} reponse={reponse} />
       )}
 
