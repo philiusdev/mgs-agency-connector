@@ -341,7 +341,7 @@ export const COLONNES_ABONNEMENT =
 
 /** `billing_plans`, colonne par colonne (migration 202609290010). */
 export const COLONNES_PLAN =
-  "id,code,name,description,price_cents,currency,billing_interval,features," +
+  "id,code,name,description,setup_price_cents,price_cents,currency,billing_interval,features," +
   "trial_days,is_active,sort_order,created_at,compatible_site_types";
 
 /**
@@ -508,6 +508,7 @@ export type LignePlan = {
   code: string;
   name: string;
   description: string | null;
+  setup_price_cents?: number | null;
   price_cents: number;
   currency: string;
   billing_interval: CodePeriodeFacturation;
@@ -539,7 +540,7 @@ export type LigneAbonnement = {
 /** Forme publique d'un forfait pour le catalogue des sites clients. */
 export type ForfaitFacturationPublic = Pick<
   LignePlan,
-  "id" | "code" | "name" | "description" | "price_cents" | "currency" | "billing_interval" | "features" | "trial_days" | "compatible_site_types"
+  "id" | "code" | "name" | "description" | "setup_price_cents" | "price_cents" | "currency" | "billing_interval" | "features" | "trial_days" | "compatible_site_types"
 >;
 
 /** Facture impayee renvoyee au site rattache a son tenant. */
