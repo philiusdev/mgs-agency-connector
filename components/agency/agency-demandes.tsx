@@ -125,14 +125,15 @@ export function ListeDemandes({
 
 type Reponse = "accepte" | "refuse";
 type DecisionLocale = Reponse | "actualisation";
+type ErreurReponse = { demandeId: string; message: string };
 
 type EtatReponse = {
   /** Demande en cours de traitement, ou `null` si les boutons sont libres. */
   occupee: string | null;
   /** Demande dont on demande le motif de refus, ou `null` si la boîte est fermée. */
   refusEnCours: string | null;
-  /** Message d'erreur à afficher sous les actions. */
-  erreur: string | null;
+  /** Erreur rattachée à la demande qui l'a provoquée. */
+  erreur: ErreurReponse | null;
 };
 
 type ActionsReponse = {
@@ -142,8 +143,8 @@ type ActionsReponse = {
   enCours: boolean;
   /** Demande dont on demande le motif, ou `null` si la boîte est fermée. */
   refusEnCours: string | null;
-  /** Message d'erreur à afficher sous les actions, ou `null`. */
-  erreur: string | null;
+  /** Erreur rattachée à la demande qui l'a provoquée. */
+  erreur: ErreurReponse | null;
   /** Décisions déjà enregistrées pendant que les données du serveur se rafraîchissent. */
   decisionsLocales: Readonly<Record<string, DecisionLocale>>;
   repondre: (id: string, reponse: Reponse, motif?: string) => Promise<void>;
@@ -193,7 +194,7 @@ function useReponseDemande({
           typeof corps?.error === "string" && corps.error.trim() !== ""
             ? corps.error
             : "Votre réponse n’a pas pu être enregistrée.";
-        setEtat({ occupee: null, refusEnCours: null, erreur: message });
+        setEtat({ occupee: null, refusEnCours: null, erreur: { demandeId: id, message } });
         if (reponseHttp.status === 409) {
           setDecisionsLocales((actuelles) => ({ ...actuelles, [id]: "actualisation" }));
           await revalider(routeRevalidation, cheminRevalidation);
@@ -210,7 +211,10 @@ function useReponseDemande({
       setEtat({
         occupee: null,
         refusEnCours: null,
-        erreur: "Votre réponse n’a pas pu être transmise. Vérifiez votre connexion.",
+        erreur: {
+          demandeId: id,
+          message: "Votre réponse n’a pas pu être transmise. Vérifiez votre connexion.",
+        },
       });
     }
   }
@@ -399,9 +403,9 @@ function ActionsDevis({
         />
       )}
 
-      {reponse.erreur !== null && (
+      {reponse.erreur?.demandeId === demande.id && (
         <Mention ton="attention">
-          {reponse.erreur}
+          {reponse.erreur.message}
         </Mention>
       )}
     </div>
