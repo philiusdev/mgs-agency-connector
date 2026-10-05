@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useSyncExternalStore } from "react";
+import { useId, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { FormulaireNouvelleDemande } from "./agency-formulaire";
@@ -525,7 +525,7 @@ function SectionFacturation({
     lireTracePaiementOuvert,
     snapshotPaiementOuvertServeur,
   );
-  const [relance, setRelance] = useState(false);
+  const [relance, actualiserTransition] = useTransition();
   const router = useRouter();
 
 
@@ -570,13 +570,8 @@ function SectionFacturation({
    * `/api/v1/billing` au lieu de resservir l'état d'avant paiement. C'est
    * exactement ce qu'il faut ici, et c'est pour ça que la purge compte.
    */
-  async function verifierLeStatut() {
-    setRelance(true);
-    try {
-      await router.refresh();
-    } finally {
-      setRelance(false);
-    }
+  function verifierLeStatut() {
+    actualiserTransition(() => router.refresh());
   }
 
   return (

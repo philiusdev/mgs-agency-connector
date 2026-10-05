@@ -121,6 +121,7 @@ export function FormulaireNouvelleDemande({
   const [etat, setEtat] = useState<EtatEnvoi>("repos");
   const [erreur, setErreur] = useState("");
   const [champs, setChamps] = useState<string[]>([]);
+  const verrouEnvoi = useRef(false);
   // Le message À CHAQUE champ en erreur, pas un message unique : le résumé
   // d'erreurs et le texte sous le champ doivent dire la même chose.
   const [messages, setMessages] = useState<Record<string, string>>({});
@@ -204,6 +205,7 @@ export function FormulaireNouvelleDemande({
   const envoyer = useCallback(
     async (evenement: React.FormEvent<HTMLFormElement>) => {
       evenement.preventDefault();
+      if (verrouEnvoi.current) return;
       const valeurs = valider({ serviceId, nom, email, telephone, objet, description });
       setChamps(valeurs.manquants);
       setMessages(valeurs.messages);
@@ -221,6 +223,7 @@ export function FormulaireNouvelleDemande({
       setErreur("");
       setChamps([]);
       setMessages({});
+      verrouEnvoi.current = true;
 
       try {
         const reponse = await fetch(routeDemande, {
@@ -290,6 +293,8 @@ export function FormulaireNouvelleDemande({
         // Réseau coupé, route absente, réponse HTML : la saisie est intacte.
         setEtat("erreur");
         setErreur("Votre demande n’a pas pu être envoyée. Réessayez dans un instant.");
+      } finally {
+        verrouEnvoi.current = false;
       }
     },
     [serviceId, nom, email, telephone, objet, description, routeDemande, revalider],

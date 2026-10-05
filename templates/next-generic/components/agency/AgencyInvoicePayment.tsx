@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { marquerPaiementOuvert, ouvrirPaiementFacture } from "./agency-paiement-client";
 
@@ -41,8 +41,11 @@ export function AgencyInvoicePayment({
 }) {
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const verrouPaiement = useRef(false);
 
   async function reglerFacture() {
+    if (verrouPaiement.current) return;
+    verrouPaiement.current = true;
     setEnCours(true);
     setMessage(null);
     try {
@@ -58,6 +61,7 @@ export function AgencyInvoicePayment({
       // possible, la redirection elle-même.
       setMessage("Le paiement n’a pas pu être ouvert. Réessayez dans un instant.");
     } finally {
+      verrouPaiement.current = false;
       setEnCours(false);
     }
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -34,9 +34,11 @@ export function AgencyForfaits({
   suffixe: string;
 }) {
   const router = useRouter();
+  const [actualisation, actualiserTransition] = useTransition();
   const [forfaitEnCours, setForfaitEnCours] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [reponse, setReponse] = useState<ReponseSouscription | null>(null);
+  const verrouSouscription = useRef(false);
 
   if (!facturation) {
     if (!indisponible) return null;
@@ -52,6 +54,8 @@ export function AgencyForfaits({
   if (facturation.billing_available !== true) return null;
 
   async function choisirForfait(forfait: AgencyBillingPlan) {
+    if (verrouSouscription.current) return;
+    verrouSouscription.current = true;
     setForfaitEnCours(forfait.id);
     setErreur(null);
     setReponse(null);
@@ -97,10 +101,11 @@ export function AgencyForfaits({
         can_pay_online: corps.can_pay_online,
         billing_message: typeof corps.billing_message === "string" ? corps.billing_message : null,
       });
-      router.refresh();
+      actualiserTransition(() => router.refresh());
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "Le forfait n’a pas pu être sélectionné.");
     } finally {
+      verrouSouscription.current = false;
       setForfaitEnCours(null);
     }
   }
@@ -149,7 +154,7 @@ export function AgencyForfaits({
                     {forfait.features.map((feature, index) => <li key={`${index}-${feature}`}>{feature}</li>)}
                   </ul>
                 )}
-                {!selectionBloquee && (
+                {!selectionBloquee && !reponse && (
                   <button
                     className="agency-bouton agency-bouton--secondaire agency-forfait-choisir"
                     type="button"
@@ -180,6 +185,11 @@ export function AgencyForfaits({
               paymentAvailable={reponse.can_pay_online}
               contactUrl={lienContact}
             />
+          )}
+          {actualisation && (
+            <p className="agency-section-intro" role="status">
+              Actualisation de l’abonnement…
+            </p>
           )}
         </div>
       )}

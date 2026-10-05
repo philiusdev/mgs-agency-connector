@@ -178,9 +178,11 @@ function useReponseDemande({
   const [etat, setEtat] = useState<EtatReponse>({ occupee: null, refusEnCours: null, erreur: null });
   const [decisionsLocales, setDecisionsLocales] = useState<Record<string, DecisionLocale>>({});
   const routeur = useRouter();
+  const verrouReponse = useRef(false);
 
   async function repondre(id: string, reponse: Reponse, motif?: string) {
-    if (typeof routeReponse !== "string" || routeReponse === "") return;
+    if (verrouReponse.current || typeof routeReponse !== "string" || routeReponse === "") return;
+    verrouReponse.current = true;
     setEtat({ occupee: id, refusEnCours: null, erreur: null });
     try {
       const reponseHttp = await fetch(routeReponse, {
@@ -216,6 +218,8 @@ function useReponseDemande({
           message: "Votre réponse n’a pas pu être transmise. Vérifiez votre connexion.",
         },
       });
+    } finally {
+      verrouReponse.current = false;
     }
   }
 

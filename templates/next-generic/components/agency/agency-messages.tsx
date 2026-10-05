@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 type MessageAgence = {
   id: string;
@@ -48,8 +48,12 @@ export function MessagesDemande({ demandeId }: { demandeId: string }) {
   const [erreur, setErreur] = useState<string | null>(null);
   const [avertissement, setAvertissement] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const verrouChargement = useRef(false);
+  const verrouEnvoi = useRef(false);
 
   async function charger() {
+    if (verrouChargement.current) return;
+    verrouChargement.current = true;
     setEtat("chargement");
     setErreur(null);
     try {
@@ -68,6 +72,8 @@ export function MessagesDemande({ demandeId }: { demandeId: string }) {
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "La conversation ne peut pas être chargée.");
       setEtat("erreur");
+    } finally {
+      verrouChargement.current = false;
     }
   }
 
@@ -83,7 +89,8 @@ export function MessagesDemande({ demandeId }: { demandeId: string }) {
   async function envoyer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const texte = contenu.replace(/\s+/g, " ").trim();
-    if (!texte || envoi) return;
+    if (!texte || verrouEnvoi.current) return;
+    verrouEnvoi.current = true;
     setEnvoi(true);
     setErreur(null);
     setAvertissement(null);
@@ -112,6 +119,7 @@ export function MessagesDemande({ demandeId }: { demandeId: string }) {
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "Le message n’a pas pu être envoyé.");
     } finally {
+      verrouEnvoi.current = false;
       setEnvoi(false);
     }
   }
