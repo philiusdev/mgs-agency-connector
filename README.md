@@ -4,6 +4,12 @@ Ce module relie un **site client** à la **plateforme MGS**, côté serveur. Il 
 vivre le lien boutique ↔ agence : facturation, annonces, demandes d'amélioration,
 promotion des services.
 
+Le modèle `templates/next-generic` transmet également les connexions et
+déconnexions de son administrateur vers « Clients · Activité ». Ce relais ne
+transmet pas les pages consultées, les clics ni le contenu des échanges. Les
+commandes ou autres actions métier doivent être enregistrées par le projet qui
+les implémente, après réussite de leur écriture.
+
 Il ne dit **rien** du MGS Account (Système B), qui est un système totalement
 séparé : identité des clients finaux, authentification Supabase, espace personnel.
 Les deux ne doivent jamais être mélangés.

@@ -92,6 +92,15 @@ export function ConnexionForm({ platformUrl, siteId }: { platformUrl: string; si
       }
       const { error } = verification;
       if (error) throw error;
+      void fetch("/api/client-activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "connexion" }),
+        credentials: "same-origin",
+        keepalive: true,
+      }).catch((erreur: unknown) => {
+        console.warn("[mgs-activity] Relais de connexion indisponible.", erreur instanceof Error ? erreur.name : "Erreur inconnue");
+      });
       window.location.assign("/admin");
     } catch (error) {
       console.error("[site-auth] Verification OTP refusee.", error);
