@@ -56,6 +56,7 @@ export const CHEMINS_CACHE_LECTURE: ReadonlySet<string> = new Set([
   "/api/v1/agency/requests",
   "/api/v1/announcements",
   "/api/v1/billing",
+  "/api/v1/billing/catalogue-public",
 ]);
 
 /** Fenêtre pendant laquelle l'échec d'UN chemin court-circuite ses propres GET. */

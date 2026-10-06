@@ -1,4 +1,4 @@
-/* Charte « Mon agence » de MindGraphixSolution — vert citron sur fond quasi noir.
+/* Charte « Mon agence » de MindGraphixSolution — rouge de la vitrine sur noir.
  *
  * Bloc volontairement autonome : à copier dans le globals.css du site client.
  *
@@ -16,39 +16,65 @@
  * Un site qui définit les mêmes variables les surchargera — c'est le seul
  * mecanisme de personnalisation prévu, et il est explicite.
  *
- * Les couleurs viennent du site vitrine (mgs-nextus.vercel.app) et de la
- * plateforme : le commerçant retrouve les mêmes accents dans l'application qui
- * lui a été livrée. Le fond est volontairement distinct de celui de sa boutique,
- * pour qu'il distingue d'un coup d'œil ce qui vient de MGS et ce qui vient de
- * son propre site.
+ * LES COULEURS SONT CELLES DE LA VITRINE, PAS UNE CHARTE À PART.
  *
- * Contrastes : le fond (#070D05, #111C0C, #182612) est vérifié en WCAG AA avec
- * chacune des sept variables de texte. `--mgs-muted`, le plus ténu, tient
- * 5,8:1 sur une surface_medium — en dessous de 7:1, donc volontairement réservé
- * aux libellés secondaires, jamais à un prix ni à un statut.
+ * Elles viennent de `app/vitrine.css` : même noir, mêmes surfaces, même rouge
+ * d'accent, mêmes famille de textes. L'ancien citron sur vert noir
+ * (`#A8E62B` sur `#070D05`) venait d'une intention — distinguer d'un coup d'œil
+ * ce qui vient de MGS de la boutique du commerçant — qui n'a plus de sens depuis
+ * que la vitrine et le centre de contrôle portent la même identité : un outil qui
+ * ne ressemble pas à la marque qu'il sert sert moins bien cette marque.
+ *
+ * `--mgs-accent` et `--mgs-danger` sont proches par construction (5,50:1 et
+ * 6,56:1), parce que la vitrine les déclare ainsi. Ce n'est pas un oubli mais un
+ * choix fait là-bas, et le changer ici romprait la ressemblance. Les deux sont
+ * donc distinguables par leur fond, jamais par leur teinte seule : tout ce qui
+ * porte un statut d'état a aussi un libellé écrit, et une teinte de fond.
+ *
+ * Contrastes, mesurés sur les trois fonds (rapport WCAG, le plus bas en premier) :
+ *
+ *   --mgs-ink        #ffffff   15,7:1   sur #202329
+ *   --mgs-ink-doux   #a0a8dc    6,8:1
+ *   --mgs-muted      #8a92b8    5,2:1   — sous 7:1, donc réservé aux libellés
+ *                                             secondaires, jamais à un prix ni à
+ *                                             un statut
+ *   --mgs-succes     #79d8a2    9,1:1
+ *   --mgs-alerte     #e7b95a    8,6:1
+ *   --mgs-danger     #ff6a62    5,6:1
+ *
+ * Le texte des boutons est `--mgs-noir` sur `--mgs-accent`, soit 5,50:1. Le
+ * blanc sur le même rouge ne tiendrait que 3,34:1 : un bouton rouge à texte
+ * blanc serait un échec, il est donc écrit sombre.
  *
  * Les `@keyframes` sont nommés `agency-*` eux aussi, pour la même raison : un
  * nom de keyframe non préfixé peut écraser celui d'une animation du site client.
  */
 
 :root {
-  --mgs-noir: #070D05;
-  --mgs-ink: #F3FAEC;
-  --mgs-ink-doux: #C2D9B4;
-  --mgs-muted: #8AA37C;
-  --mgs-accent: #A8E62B;
-  --mgs-accent-vif: #C8FF4D;
-  --mgs-accent-sombre: #5C8A15;
-  --mgs-accent-soft: rgba(168, 230, 43, 0.09);
-  --mgs-surface: #111C0C;
-  --mgs-surface-2: #182612;
-  --mgs-line: #253D1B;
-  --mgs-line-fort: #38592A;
-  --mgs-succes: #7DD83F;
-  --mgs-alerte: #E8B93A;
-  --mgs-danger: #E85D5D;
-  --mgs-radius: 14px;
-  --mgs-limeur: 0 0 0 1px rgba(168, 230, 43, 0.35), 0 0 28px -6px rgba(168, 230, 43, 0.4);
+  --mgs-noir: #131419;
+  --mgs-ink: #ffffff;
+  --mgs-ink-doux: #a0a8dc;
+  --mgs-muted: #8a92b8;
+  --mgs-accent: #ff4940;
+  --mgs-accent-vif: #ff6a62;
+  --mgs-accent-sombre: #c9372f;
+  --mgs-accent-soft: rgba(255, 73, 64, 0.09);
+  --mgs-surface: #191b21;
+  --mgs-surface-2: #202329;
+  --mgs-line: #2b2e3a;
+  --mgs-line-fort: #474b5e;
+  --mgs-succes: #79d8a2;
+  --mgs-alerte: #e7b95a;
+  --mgs-danger: #ff6a62;
+  --mgs-radius: 0px;
+  --mgs-limeur: none;
+
+  /* La pile de textes est celle de la vitrine (`--police-texte` dans
+     `app/vitrine.css`), écrite ici en dur : le tiroir ne doit hériter de la
+     typographie du site client que par accident. Un site client qui définit sa
+     propre pile sur `body` verrait sinon ses titres de police dans le panneau,
+     et un dashboard en serif display n'est pas un dashboard. */
+  --mgs-police: "Heebo", "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
 
   /* Le tiroir passe AU-DESSUS de tout, y compris d'un en-tête `sticky` de la
    * boutique à `z-index: 9999`. Un `z-index: 4000` suffirait pour un site
@@ -61,7 +87,7 @@
 
   /* Un navigateur sans backdrop-filter ne voit pas le voile translucide : on
    * double donc par un fond opaque à 62 %. */
-  --mgs-voile: rgba(3, 7, 2, 0.62);
+  --mgs-voile: rgba(10, 11, 15, 0.62);
 }
 
 @keyframes agency-apparition {
@@ -85,8 +111,8 @@
 }
 
 @keyframes agency-respiration {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 255, 77, 0.55); }
-  50% { box-shadow: 0 0 0 12px rgba(200, 255, 77, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 73, 64, 0.55); }
+  50% { box-shadow: 0 0 0 12px rgba(255, 73, 64, 0); }
 }
 
 /* ---- 0. Utilitaires ------------------------------------------------------- */
@@ -172,7 +198,7 @@
  * clignotement, et le réglage système qui les coupe doit suffire. */
 .agency-bouton-flottant--marque {
   border-color: var(--mgs-accent-vif);
-  box-shadow: 0 0 0 2px rgba(200, 255, 77, 0.4), 0 12px 30px -12px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 0 0 2px rgba(255, 73, 64, 0.4), 0 12px 30px -12px rgba(0, 0, 0, 0.95);
   animation: agency-respiration 2.6s ease-in-out infinite;
 }
 
@@ -247,6 +273,11 @@
   max-height: 100dvh;
   background: var(--mgs-noir);
   color: var(--mgs-ink);
+  /* La pile est posée ICI, sur la racine du tiroir, et pas seulement en
+     variable. Sans elle, le tiroir hérite de la pile du site client : un site
+     qui pose une serif sur `body` afficherait ses titres en serif dans le
+     panneau, et le dashboard aurait l'air d'une page du site. */
+  font-family: var(--mgs-police);
   border: 1px solid var(--mgs-line);
   box-shadow: -20px 0 60px -30px rgba(0, 0, 0, 1);
 }
@@ -363,7 +394,7 @@
 
 .agency-mention--attention {
   border-left: 3px solid var(--mgs-alerte);
-  background: rgba(232, 185, 58, 0.1);
+  background: rgba(231, 185, 90, 0.1);
   color: var(--mgs-ink);
 }
 
@@ -482,16 +513,16 @@
 
 .agency-pastille--nouvelle,
 .agency-pastille--inconnu,
-.agency-pastille--incomplete { border-color: rgba(232, 185, 58, 0.5); background: rgba(232, 185, 58, 0.12); color: var(--mgs-alerte); }
+.agency-pastille--incomplete { border-color: rgba(231, 185, 90, 0.5); background: rgba(231, 185, 90, 0.12); color: var(--mgs-alerte); }
 
 .agency-pastille--en_cours,
 .agency-pastille--trialing { border-color: var(--mgs-accent-sombre); background: var(--mgs-accent-soft); color: var(--mgs-accent); }
 
-.agency-pastille--en_attente_client { border-color: rgba(232, 185, 58, 0.5); background: rgba(232, 185, 58, 0.1); color: var(--mgs-alerte); }
+.agency-pastille--en_attente_client { border-color: rgba(231, 185, 90, 0.5); background: rgba(231, 185, 90, 0.1); color: var(--mgs-alerte); }
 
 .agency-pastille--livree,
 .agency-pastille--active,
-.agency-pastille--payee { border-color: rgba(125, 216, 63, 0.5); background: rgba(125, 216, 63, 0.13); color: var(--mgs-succes); }
+.agency-pastille--payee { border-color: rgba(121, 216, 162, 0.5); background: rgba(121, 216, 162, 0.13); color: var(--mgs-succes); }
 
 .agency-pastille--annulee,
 .agency-pastille--refusee,
@@ -500,7 +531,7 @@
 
 .agency-pastille--past_due,
 .agency-pastille--unpaid,
-.agency-pastille--impayee { border-color: rgba(232, 93, 93, 0.55); background: rgba(232, 93, 93, 0.13); color: var(--mgs-danger); }
+.agency-pastille--impayee { border-color: rgba(255, 106, 98, 0.55); background: rgba(255, 106, 98, 0.13); color: var(--mgs-danger); }
 
 /* Prix : « Inclus » est vert, « Devis en attente » est neutre, un montant chiffré
  * est la couleur du texte. Un prix ne s'affiche JAMAIS en rouge : le rouge
@@ -516,7 +547,7 @@
   letter-spacing: 0.01em;
 }
 
-.agency-prix--inclus { border-color: rgba(125, 216, 63, 0.5); background: rgba(125, 216, 63, 0.13); color: var(--mgs-succes); }
+.agency-prix--inclus { border-color: rgba(121, 216, 162, 0.5); background: rgba(121, 216, 162, 0.13); color: var(--mgs-succes); }
 .agency-prix--devis_en_attente { border-color: var(--mgs-line-fort); color: var(--mgs-ink-doux); }
 .agency-prix--chiffre { border-color: var(--mgs-accent-sombre); background: var(--mgs-accent-soft); color: var(--mgs-accent); }
 
@@ -838,7 +869,7 @@
 
 /* `aria-invalid` est posé par le composant : le style suit l'attribut, pas une
  * classe ajoutée à la main. Un champ invalide s'annonce ET se voit. */
-.agency-saisie[aria-invalid="true"] { border-color: var(--mgs-danger); background: rgba(232, 93, 93, 0.08); }
+.agency-saisie[aria-invalid="true"] { border-color: var(--mgs-danger); background: rgba(255, 106, 98, 0.08); }
 
 .agency-saisie--zone { min-height: 110px; resize: vertical; line-height: 1.5; }
 
@@ -852,8 +883,8 @@
   line-height: 1.5;
 }
 
-.agency-retour--ok { border-left: 3px solid var(--mgs-succes); background: rgba(125, 216, 63, 0.13); color: var(--mgs-succes); }
-.agency-retour--erreur { border-left: 3px solid var(--mgs-danger); background: rgba(232, 93, 93, 0.12); color: var(--mgs-danger); }
+.agency-retour--ok { border-left: 3px solid var(--mgs-succes); background: rgba(121, 216, 162, 0.13); color: var(--mgs-succes); }
+.agency-retour--erreur { border-left: 3px solid var(--mgs-danger); background: rgba(255, 106, 98, 0.12); color: var(--mgs-danger); }
 .agency-retour-detail { display: block; margin-top: 4px; color: var(--mgs-ink-doux); font-size: 0.82rem; }
 
 /* Le résumé d'erreurs reçoit le focus, donc il lui faut un anneau visible : sans
@@ -878,7 +909,7 @@
 }
 
 /* Le lien du résumé doit rester lisible sur fond rouge : sa couleur est
- * héritée, et `var(--mgs-danger)` seul sur `rgba(232, 93, 93, 0.12)` tomberait
+ * héritée, et `var(--mgs-danger)` seul sur `rgba(255, 106, 98, 0.12)` tomberait
  * sous 4.5:1. C'est le texte de la pastille qui porte le contraste, pas le trait. */
 .agency-resume-lien:hover { color: var(--mgs-ink); }
 
@@ -1016,7 +1047,7 @@
   font-size: 0.92rem;
 }
 
-.agency-banner-warning { border-color: rgba(232, 185, 58, 0.45); background: rgba(232, 185, 58, 0.1); }
+.agency-banner-warning { border-color: rgba(231, 185, 90, 0.45); background: rgba(231, 185, 90, 0.1); }
 .agency-banner-info { background: var(--mgs-accent-soft); }
 .agency-banner-info .agency-banner-icone { color: var(--mgs-accent); }
 .agency-banner-icone { flex: none; color: var(--mgs-alerte); font-size: 1.1rem; line-height: 1; }
@@ -1079,8 +1110,8 @@
 .agency-subscription { margin: 0; padding: 10px 14px; border: 1px solid var(--mgs-line); border-radius: 999px; background: var(--mgs-accent-soft); color: var(--mgs-ink); font-size: 0.85rem; }
 .agency-feedback-ok,
 .agency-feedback-error { margin: 0; padding: 12px 14px; border-radius: var(--mgs-radius); font-size: 0.9rem; }
-.agency-feedback-ok { background: rgba(125, 216, 63, 0.13); color: var(--mgs-succes); }
-.agency-feedback-error { background: rgba(232, 93, 93, 0.12); color: var(--mgs-danger); }
+.agency-feedback-ok { background: rgba(121, 216, 162, 0.13); color: var(--mgs-succes); }
+.agency-feedback-error { background: rgba(255, 106, 98, 0.12); color: var(--mgs-danger); }
 
 /* ---- 16. Écrans étroits ----------------------------------------------------------- */
 
