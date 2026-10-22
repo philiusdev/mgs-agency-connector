@@ -436,7 +436,7 @@ export type LigneService = {
   billing_plan_id?: string | null;
   /** Cette prestation correspond à l'achat de création d'un site. */
   is_site_creation: boolean;
-  /** Formation de gestion : droit initial après achat payé, renouvellement payant. */
+  /** Formation : une demande incluse par site sous abonnement actif, renouvellements payants. */
   is_training: boolean;
   /** Delai indicatif en heures, NULL pour une prestation sur rendez-vous. */
   turnaround_hours: number | null;
@@ -1693,8 +1693,8 @@ export function presenterOffre(ligne: LigneOffre, numero?: string | null): Offre
   const prixLibelle =
     mode === "initial_included_then_paid"
       ? prix
-        ? `Formation initiale incluse après paiement de la création du site · renouvellement : ${new Intl.NumberFormat("fr-FR").format(prix / 100)} F CFA`
-        : "Formation initiale incluse après paiement de la création du site · renouvellement sur devis"
+        ? `Une formation incluse par site si abonnement actif · renouvellement : ${new Intl.NumberFormat("fr-FR").format(prix / 100)} F CFA`
+        : "Une formation incluse par site si abonnement actif · renouvellement sur devis"
       : mode === "fixed_once" && prix
         ? `${new Intl.NumberFormat("fr-FR").format(prix / 100)} F CFA`
         : "Prestation payante · sur devis";

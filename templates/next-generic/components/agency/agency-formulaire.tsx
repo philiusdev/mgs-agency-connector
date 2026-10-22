@@ -434,13 +434,13 @@ export function FormulaireNouvelleDemande({
               <option key={prestation.id} value={prestation.id}>
                 {prestation.titre}
                 {prestation.prix?.libelle ? ` — ${prestation.prix.libelle}` : ""}
-                {prestation.formation_gestion ? " — formation initiale incluse sous condition" : ""}
+                {prestation.formation_gestion ? " — une formation incluse par site si abonnement actif" : ""}
               </option>
             ))}
           </select>
           <p className="agency-aide" id={cid("aide-service_id")}>
             {prestationChoisie?.formation_gestion
-              ? "La première formation est incluse une fois après paiement de la création de ce site. Sinon, le tarif de renouvellement s’applique ; l’agence confirme la règle après votre demande."
+              ? "Une formation est incluse une fois par site si l’espace a un abonnement actif. Les demandes suivantes restent au tarif affiché ou sur devis."
               : "Seules les prestations publiées par l’agence peuvent être demandées."}
           </p>
           <MessageChamp id={cid("erreur-service_id")} texte={messages.service_id} />

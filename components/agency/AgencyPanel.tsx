@@ -774,8 +774,8 @@ function SectionPrestations({
             )}
             {prestation.formation_gestion && (
               <p className="agency-prestation-meta">
-                Première formation incluse une fois après paiement de la création de ce site ;
-                le tarif affiché s’applique aux renouvellements.
+                Une formation incluse par site si l’espace a un abonnement actif ;
+                le tarif affiché s’applique aux demandes suivantes.
               </p>
             )}
 
