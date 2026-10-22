@@ -640,6 +640,46 @@ export function agencyWebsiteUrl(): string | null {
 }
 
 /**
+ * L'identité de l'agence pour le crédit du pied de page : son nom, et l'adresse
+ * de son site.
+ *
+ * UNE SEULE LECTURE, ET ELLE EST CACHÉE. `loadAgencySpace()` demande cinq
+ * lectures à la plateforme ; le pied de page n'en demande qu'une, et c'est
+ * `/api/v1/agency` — la même, dont la réponse est déjà mise en cache pendant
+ * soixante secondes (`client.ts`). Sans ce cache, chaque page de boutique
+ * demanderait à la plateforme le nom de l'agence, et la limite de soixante
+ * requêtes par minute serait atteinte en quelques minutes de navigation.
+ *
+ * LA PLATEFORME FAIT FOI, L'ENVIRONNEMENT REPLIE. Dès que la plateforme a
+ * répondu, c'est elle qui décide du nom affiché : l'agence peut corriger son
+ * nom depuis la console sans redéployer le site. Quand elle est muette, la
+ * fonction retombe sur `MGS_AGENCY_NAME` et `MGS_WEBSITE_URL` — deux réglages
+ * propres au site, lus côté serveur, jamais exposés au navigateur.
+ *
+ * UN LIEN PERDU EST PIRE QU'UN LIEN ANCIEN. Si la plateforme répond sans
+ * adresse — identité enregistrée mais site vide — l'adresse de l'environnement
+ * reprend la place. Le pied de page affiche alors un nom qui n'est plus cliquable
+ * alors qu'il l'était la veille : c'est une régression visible par le public,
+ * et le texte seul ne dit pas à l'agence que son site n'est plus référencé.
+ *
+ * La fonction ne lève jamais : `callAgency` renvoie `null` au moindre échec, et
+ * l'identité de repli est toujours complète.
+ */
+export async function chargerIdentiteAgence(): Promise<IdentiteAgence> {
+  const brut = await callAgency<ReponseEspaceAgenceBrut>("/api/v1/agency");
+  const plateforme = commeObjet(brut);
+  const agence = commeObjet(plateforme?.agence);
+  // `agence.identite` fait foi ; le `identite` de premier niveau n'existe que
+  // pour une plateforme plus ancienne, et ne l'emporte jamais.
+  const identiteBrut = agence?.identite ?? plateforme?.identite ?? null;
+  // Le filet de repli s'applique quand la plateforme n'a pas répondu du tout :
+  // une plateforme qui répond, même sans adresse, reste la source de vérité.
+  const identite = normaliserIdentite(identiteBrut, plateforme === null);
+  if (identite.site_web) return identite;
+  return { ...identite, site_web: agencyWebsiteUrl() };
+}
+
+/**
  * L'espace « Mon agence », ou `null` s'il n'y a rien à montrer.
  *
  * `null` signifie : la plateforme n'a répondu à aucune des trois lectures, et
