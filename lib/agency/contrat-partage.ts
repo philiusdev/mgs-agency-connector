@@ -1204,13 +1204,18 @@ export function decrirePrix(source: SourcePrix | null | undefined): PrixAffiche 
   };
 }
 
-/** Prix d'une prestation du catalogue. Repli : « Devis en attente ». */
+/** Prix d'une prestation du catalogue. Un prix absent signifie « Sur devis ». */
 export function decrirePrixService(ligne: LigneService | null | undefined): PrixAffiche {
-  return decrirePrix({
+  const prix = decrirePrix({
     montant_cents: ligne?.price_cents ?? null,
     gratuit: ligne?.is_free === true,
     devise: ligne?.currency,
   });
+  return ligne &&
+    ligne.is_free !== true &&
+    (ligne.price_cents === null || ligne.price_cents === undefined)
+    ? { ...prix, libelle: "Sur devis" }
+    : prix;
 }
 
 /**
