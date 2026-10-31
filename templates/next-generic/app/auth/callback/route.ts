@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 
+function typeOtpAutorise(value: string | null): value is "magiclink" | "invite" | "signup" {
+  return value === "magiclink" || value === "invite" || value === "signup";
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const tokenHash = request.nextUrl.searchParams.get("token_hash");
@@ -13,11 +17,11 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) return NextResponse.redirect(new URL(destination, request.url));
   }
-  if (tokenHash && tokenType === "magiclink" && /^[A-Za-z0-9_-]{32,256}$/.test(tokenHash)) {
+  if (tokenHash && typeOtpAutorise(tokenType) && /^[A-Za-z0-9_-]{32,256}$/.test(tokenHash)) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "magiclink",
+      type: tokenType,
     });
     if (!error) return NextResponse.redirect(new URL(destination, request.url));
   }
