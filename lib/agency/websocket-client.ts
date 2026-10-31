@@ -1,6 +1,12 @@
 // Client WebSocket côté site pour la connexion temps réel à la plateforme.
+//
+// Le paquet `ws` n'est pas une dépendance du module : le site qui copie cette
+// classe doit l'avoir côté serveur. Le type local décrit seulement la surface
+// utilisée, pour que la copie se typecheck même quand `@types/ws` est absent.
 
-import type { WebSocket } from "ws";
+import { createRequire } from "node:module";
+
+const chargerModule = createRequire(import.meta.url);
 
 /** Type d'un événement reçu de la plateforme. */
 export type EvenementWS = {
@@ -15,6 +21,17 @@ export type CallbackEvenement = (evenement: EvenementWS) => void;
 /** État de la connexion WebSocket. */
 export type EtatConnexionWS = "deconnecte" | "connectant" | "connecte" | "echec";
 
+/** Surface de `ws.WebSocket` réellement utilisée par ce client. */
+type SocketWebSocket = {
+  readyState: number;
+  on(event: "open", callback: () => void): void;
+  on(event: "message", callback: (donnees: unknown) => void): void;
+  on(event: "close", callback: () => void): void;
+  on(event: "error", callback: (erreur: unknown) => void): void;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+};
+
 /**
  * Client WebSocket pour un site client.
  */
@@ -22,7 +39,7 @@ export class WebSocketClient {
   private url: string;
   private cle: string;
   private secret: string;
-  private ws: WebSocket | null = null;
+  private ws: SocketWebSocket | null = null;
   private etat: EtatConnexionWS = "deconnecte";
   private tentativesReconnexion = 0;
   private maxTentatives = 10;
@@ -53,7 +70,8 @@ export class WebSocketClient {
     console.log(`[mgs-ws-client] Connexion à ${this.url}`);
 
     try {
-      const { WebSocket } = require("ws");
+      // Import tardif : `ws` n'est nécessaire que si le site active le temps réel.
+      const { WebSocket } = chargerModule("ws") as { WebSocket: new (url: string) => SocketWebSocket };
       this.ws = new WebSocket(this.url);
 
       this.ws.on("open", () => this.gererOuverture());

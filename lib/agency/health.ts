@@ -2,7 +2,7 @@
 // Ce module n'est PAS côté route : il est destiné à être appelé depuis
 // une page d'administration ou un composant serveur pour afficher l'état
 // de santé du connecteur, sans faire d'appel réseau à la plateforme.
-import { getMetriquesConnexion, connecteurAgenceConfigure } from "./client.ts";
+import { getMetriquesConnexion, connecteurAgenceConfigure } from "./client";
 
 /** Résultat du diagnostic de santé du connecteur. */
 export type DiagnosticConnexion = {
