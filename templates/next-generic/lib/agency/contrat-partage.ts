@@ -319,7 +319,7 @@ export const COLONNES_DEMANDE =
 export const COLONNES_DEMANDE_AGENT =
   "id,tenant_id,service_id,site_id,requester_user_id,requester_name,requester_email,requester_phone," +
   "subject,description,status,quoted_price_cents,currency,is_paid,due_at,paid_at," +
-  "site_creation_purchase,formation_initiale_incluse,created_at,updated_at," +
+  "site_creation_purchase,formation_initiale_incluse,created_at,updated_at,archived_at," +
   "service:agency_services(id,code,title,is_free,price_cents,currency,turnaround_hours)";
 
 export const COLONNES_EVENEMENT =
@@ -1204,13 +1204,18 @@ export function decrirePrix(source: SourcePrix | null | undefined): PrixAffiche 
   };
 }
 
-/** Prix d'une prestation du catalogue. Repli : « Devis en attente ». */
+/** Prix d'une prestation du catalogue. Un prix absent signifie « Sur devis ». */
 export function decrirePrixService(ligne: LigneService | null | undefined): PrixAffiche {
-  return decrirePrix({
+  const prix = decrirePrix({
     montant_cents: ligne?.price_cents ?? null,
     gratuit: ligne?.is_free === true,
     devise: ligne?.currency,
   });
+  return ligne &&
+    ligne.is_free !== true &&
+    (ligne.price_cents === null || ligne.price_cents === undefined)
+    ? { ...prix, libelle: "Sur devis" }
+    : prix;
 }
 
 /**

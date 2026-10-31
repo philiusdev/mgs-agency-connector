@@ -62,6 +62,160 @@ export const CHEMINS_CACHE_LECTURE: ReadonlySet<string> = new Set([
 /** Fenêtre pendant laquelle l'échec d'UN chemin court-circuite ses propres GET. */
 const FENETRE_ECHEC_MS = 20_000;
 
+/** Nombre maximum de tentatives pour un appel qui échoue (hors écritures critiques). */
+const MAX_TENTATIVES = 3;
+
+/** Délai initial entre deux tentatives, en millisecondes (backoff exponentiel). */
+const DELAI_RETRY_MS = 1_000;
+
+/** États du circuit breaker par chemin. */
+type EtatCircuit = "ferme" | "ouvert" | "mi-entrouvert";
+
+/** Seuil d'erreurs pour ouvrir le circuit (sur une fenêtre glissante). */
+const SEUIL_ERREURS_CIRCUIT = 5;
+
+/** Durée d'ouverture du circuit avant de passer à mi-entrouvert, en ms. */
+const DUREE_CIRCUIT_OUVERT_MS = 30_000;
+
+/** Nombre de succès requis en mi-entrouvert pour refermer le circuit. */
+const SUCCES_POUR_REFERMER = 2;
+
+/** État du circuit breaker, par chemin. Le runtime vit longtemps, on borne la carte. */
+const circuitsEtat = new Map<string, {
+  etat: EtatCircuit;
+  erreurs: number;
+  depuisOuvert: number;
+  succesConsecutifs: number;
+}>;
+
+/** Nombre maximum de circuits suivis en mémoire. */
+const MAX_CIRCUITS = 64;
+
+/** Métriques de connexion, pour le diagnostic et l'affichage du statut. */
+export type MetriqueConnexion = {
+  chemin: string;
+  dernierAppel: number | null;
+  dernierSucces: number | null;
+  dernierEchec: number | null;
+  totalAppels: number;
+  totalSucces: number;
+  totalEchecs: number;
+  tempsMoyenMs: number;
+  enCircuitOuvert: boolean;
+};
+
+/** Registre des métriques, par chemin. */
+const metriques = new Map<string, MetriqueConnexion>();
+
+/** Vérifie si le circuit d'un chemin est ouvert (refuse d'appeler). */
+function circuitEstOuvert(chemin: string, maintenant: number): boolean {
+  const c = circuitsEtat.get(chemin);
+  if (!c) return false;
+  if (c.etat === "ouvert") {
+    if (maintenant - c.depuisOuvert > DUREE_CIRCUIT_OUVERT_MS) {
+      // Passe en mi-entrouvert pour tester si la plateforme est revenue.
+      c.etat = "mi-entrouvert";
+      c.succesConsecutifs = 0;
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/** Enregistre un succès pour le circuit d'un chemin. */
+function circuitSucces(chemin: string): void {
+  let c = circuitsEtat.get(chemin);
+  if (!c) {
+    c = { etat: "ferme", erreurs: 0, depuisOuvert: 0, succesConsecutifs: 0 };
+    circuitsEtat.set(chemin, c);
+  }
+  if (c.etat === "mi-entrouvert") {
+    c.succesConsecutifs += 1;
+    if (c.succesConsecutifs >= SUCCES_POUR_REFERMER) {
+      c.etat = "ferme";
+      c.erreurs = 0;
+      c.depuisOuvert = 0;
+    }
+  } else if (c.etat === "ferme") {
+    c.erreurs = Math.max(0, c.erreurs - 1);
+  }
+}
+
+/** Enregistre un échec pour le circuit d'un chemin. Ouvre le circuit si le seuil est atteint. */
+function circuitEchec(chemin: string, maintenant: number): void {
+  let c = circuitsEtat.get(chemin);
+  if (!c) {
+    c = { etat: "ferme", erreurs: 0, depuisOuvert: 0, succesConsecutifs: 0 };
+    circuitsEtat.set(chemin, c);
+  }
+  c.erreurs += 1;
+  if (c.etat === "ferme" && c.erreurs >= SEUIL_ERREURS_CIRCUIT) {
+    c.etat = "ouvert";
+    c.depuisOuvert = maintenant;
+  }
+}
+
+/** Nettoie les circuits périmés pour éviter toute fuite mémoire. */
+function purgerCircuits(maintenant: number): void {
+  if (circuitsEtat.size <= MAX_CIRCUITS) return;
+  const supprimes: string[] = [];
+  for (const [chemin, c] of circuitsEtat) {
+    if (c.etat === "ferme" && c.erreurs === 0 && maintenant - c.depuisOuvert > 300_000) {
+      supprimes.push(chemin);
+    }
+  }
+  for (const chemin of supprimes.slice(0, Math.max(1, circuitsEtat.size - MAX_CIRCUITS))) {
+    circuitsEtat.delete(chemin);
+  }
+}
+
+/** Retourne les métriques d'un chemin, en les créant si nécessaire. */
+function getOrCreateMetrique(chemin: string): MetriqueConnexion {
+  let m = metriques.get(chemin);
+  if (!m) {
+    m = {
+      chemin,
+      dernierAppel: null,
+      dernierSucces: null,
+      dernierEchec: null,
+      totalAppels: 0,
+      totalSucces: 0,
+      totalEchecs: 0,
+      tempsMoyenMs: 0,
+      enCircuitOuvert: false,
+    };
+    metriques.set(chemin, m);
+  }
+  m.enCircuitOuvert = circuitEstOuvert(chemin, Date.now());
+  return m;
+}
+
+/** Met à jour les métriques après un appel. */
+function majMetrique(
+  m: MetriqueConnexion,
+  maintenant: number,
+  succes: boolean,
+  dureeMs: number,
+): void {
+  m.dernierAppel = maintenant;
+  m.totalAppels += 1;
+  if (succes) {
+    m.dernierSucces = maintenant;
+    m.totalSucces += 1;
+    // Moyenne mobile simple sur les succès.
+    m.tempsMoyenMs = Math.round((m.tempsMoyenMs * (m.totalSucces - 1) + dureeMs) / m.totalSucces);
+  } else {
+    m.dernierEchec = maintenant;
+    m.totalEchecs += 1;
+  }
+}
+
+/** Délai d'attente avant une nouvelle tentative (backoff exponentiel). */
+function delaiRetry(tentative: number): number {
+  return DELAI_RETRY_MS * Math.pow(2, tentative - 1);
+}
+
 /**
  * Mémoire d'échec, PAR CHEMIN : chemin de l'API → instant (ms) auquel SA fenêtre
  * se referme. Bornée, et purgée à chaque armement.
@@ -149,68 +303,105 @@ function armerEchec(chemin: string, maintenant: number): void {
  * build resterait `undefined` pour toujours, ce qui ferait silencieusement
  * échouer le connecteur sur un site déployé en ISR.
  */
+/** Lecture authentifiée vers la plateforme, avec retry et circuit breaker. *
+ * Renvoie `null` — jamais d'exception — si la plateforme est injoignable, muette,
+ * en erreur, ou si les variables manquent. */
 export async function callAgency<T>(path: string, init?: RequestInit): Promise<T | null> {
   const preparatif = await preparerAppel(path, init);
   if (preparatif.pret === false) return null;
-  const { requestUrl, chemin, methode, cheminValide } = preparatif;
+  const { requestUrl, chemin, methode, cheminValide, maintenant } = preparatif;
 
-  // Le court-circuit est consulté APRÈS le contrôle d'origine, et sur le
-  // `pathname` seul : une lecture refusée doit continuer à être signalée même
-  // pendant une panne, et deux écritures de la même lecture doivent partager
-  // une seule fenêtre.
-  if (methode === "GET" && enFenetreEchec(chemin, preparatif.maintenant)) return null;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-    const estLecture = methode === "GET" && CHEMINS_CACHE_LECTURE.has(chemin);
-    const secondes = estLecture ? tempsRevalidation() : 0;
-    try {
-      const response = await fetch(requestUrl, entetesPlateforme(init, {
-        signal: controller.signal,
-        ...(estLecture && secondes > 0
-          ? { next: { revalidate: secondes, tags: [ETIQUETTE_CACHE_AGENCE] } }
-          : { cache: "no-store" }),
-      }));
-      // Un statut non-2xx est TOUJOURS `null` ici, y compris quand le corps
-      // serait du JSON valide : le contrat de `callAgency` est « toute erreur
-      // HTTP est un `null` », et une page de boutique ne doit jamais confondre
-      // « la plateforme a refuse » avec « la plateforme a reponde 201 ».
-      // `callAgenceAvecDetail` est la seule voie qui expose le statut.
-      if (!response.ok) {
-        armerEchecSiIndisponible(response.status, chemin, preparatif.maintenant);
-        return null;
-      }
-      // Un 200 qui n'est pas du JSON est aussi une panne, pas une donnee : on
-      // rend `null` sans propager, sinon une page de boutique lèverait. En
-      // revanche un corps `null` sur un 200 est une REPONSE VALIDE — la
-      // plateforme repond, elle n'a simplement rien a dire — donc n'arme rien :
-      // sinon un seul endpoint muet priverait le site des trois autres pendant
-      // toute la fenetre.
-      return (await response.json().catch(() => null)) as T | null;
-    } finally {
-      clearTimeout(timeout);
-    }
-  } catch (error) {
-    // Une exception ici est soit un réseau mort, soit une configuration fausse
-    // (`MGS_PLATFORM_URL` illisible, `path` malformé) — cette seconde famille
-    // n'est pas une panne passagère, et la laisser couvrir vingt secondes de
-    // lectures ne ferait qu'éteindre le connecteur sans rien laisser passer. On
-    // n'arme donc que si un chemin a déjà été validé ; sinon seul le journal
-    // parle, et il parle à chaque appel.
-    if (cheminValide !== null) armerEchec(cheminValide, Date.now());
-    console.error("[mgs-agency] Plateforme momentanément indisponible.", error);
+  // Circuit breaker : si le circuit est ouvert, on refuse l'appel immédiatement.
+  if (methode === "GET" && circuitEstOuvert(chemin, maintenant)) {
+    const m = getOrCreateMetrique(chemin);
+    m.totalEchecs += 1;
+    m.dernierEchec = maintenant;
     return null;
   }
+
+  // Le court-circuit d'échec existant (fenêtre de 20 s par chemin).
+  if (methode === "GET" && enFenetreEchec(chemin, maintenant)) return null;
+
+  const estLecture = methode === "GET" && CHEMINS_CACHE_LECTURE.has(chemin);
+  const secondes = estLecture ? tempsRevalidation() : 0;
+  const metrique = getOrCreateMetrique(chemin);
+  const estEcritureCritique = methode !== "GET";
+
+  // Les écritures (POST, PUT, DELETE) ne subissent PAS le retry : un échec
+  // précédent ne doit jamais absorber une demande d'amélioration ou un message.
+  const maxTentatives = estEcritureCritique ? 1 : MAX_TENTATIVES;
+
+  let derniereReponse: Response | null = null;
+  let derniereErreur: unknown = null;
+
+  for (let tentative = 1; tentative <= maxTentatives; tentative += 1) {
+    const debutTentative = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        const response = await fetch(requestUrl, entetesPlateforme(init, {
+          signal: controller.signal,
+          ...(estLecture && secondes > 0
+            ? { next: { revalidate: secondes, tags: [ETIQUETTE_CACHE_AGENCE] } }
+            : { cache: "no-store" }),
+        }));
+        derniereReponse = response;
+
+        if (response.ok) {
+          const corps = (await response.json().catch(() => null)) as T | null;
+          // Succès : referme/réduit le circuit, met à jour les métriques.
+          circuitSucces(chemin);
+          // Succès : la fenêtre d'échec de ce chemin, si elle existait, ne sert plus.
+          if (cheminValide !== null) echeancesEchec.delete(cheminValide);
+          const duree = Date.now() - debutTentative;
+          majMetrique(metrique, Date.now(), true, duree);
+          purgerCircuits(Date.now());
+          return corps;
+        }
+
+        // Statut non-2xx : échec.
+        derniereErreur = `HTTP ${response.status}`;
+        if (tentative < maxTentatives) {
+          await new Promise((resolve) => setTimeout(resolve, delaiRetry(tentative)));
+          continue;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch (error) {
+      derniereErreur = error;
+      // Erreur réseau ou timeout : on réessaie si ce n'est pas la dernière tentative
+      // et ce n'est pas une écriture critique.
+      if (tentative < maxTentatives && !estEcritureCritique) {
+        await new Promise((resolve) => setTimeout(resolve, delaiRetry(tentative)));
+        continue;
+      }
+    }
+  }
+
+  // Toutes les tentatives ont échoué : on arme le circuit et on journalise.
+  const maintenantEchec = Date.now();
+  armerEchecSiIndisponible(
+    derniereReponse?.status ?? 0,
+    chemin,
+    maintenantEchec,
+  );
+  circuitEchec(chemin, maintenantEchec);
+  const duree = Date.now() - maintenant;
+  majMetrique(metrique, maintenantEchec, false, duree);
+  purgerCircuits(Date.now());
+  console.error("[mgs-agency] Plateforme momentanément indisponible.", derniereErreur);
+  return null;
 }
 
 /* ========================================================================== *
- * Appels dont le REFUS de la plateforme fait partie du résultat
+ * Appels dont le REFUS de la plateforme fait partie du résultat              *
  * ========================================================================== */
 
 /** Résultat d'un appel dont on a besoin de distinguer « refusé » de « absent ». */
 export type ReponsePlateforme<T> =
-  | { ok: true; valeur: T }
+  | { ok: true; valeur: T | null }
   | { ok: false; statut: number; corps: unknown; disponible: boolean };
 
 /**
@@ -223,7 +414,7 @@ export type ReponsePlateforme<T> =
  * Cette fonction casse ce contrat pour un seul usage : quand l'appel est déclenché
  * par un bouton. « Votre réponse n'a pas pu être enregistrée » et « le service est
  * momentanément indisponible » ne se distinguent pas devant un commerçant qui vient
- * d'appuyer sur « Accepter le devis » — il va believeson clic n'est pas passé, ou
+ * d'appuyer sur « Accepter le devis » — il va croire son clic n'est pas passé, ou
  * appeler l'agence pour un devis déjà refusé. Le statut HTTP est donc conservé, et
  * `disponible` dit si la plateforme a répondu du tout.
  *
@@ -238,7 +429,18 @@ export async function callAgenceAvecDetail<T>(
   const preparatif = await preparerAppel(path, init);
   if (preparatif.pret === false) return null;
 
-  const { requestUrl, chemin, cheminValide } = preparatif;
+  const { requestUrl, chemin, cheminValide, maintenant } = preparatif;
+
+  // Circuit breaker : si le circuit est ouvert, on refuse l'appel immédiatement.
+  if (circuitEstOuvert(chemin, maintenant)) {
+    const m = getOrCreateMetrique(chemin);
+    m.totalEchecs += 1;
+    m.dernierEchec = maintenant;
+    return null;
+  }
+
+  // Court-circuit d'échec par chemin.
+  if (enFenetreEchec(chemin, maintenant)) return null;
 
   try {
     const controller = new AbortController();
@@ -249,20 +451,50 @@ export async function callAgenceAvecDetail<T>(
         cache: "no-store",
       }));
       if (!response.ok) {
-        armerEchecSiIndisponible(response.status, chemin, preparatif.maintenant);
+        armerEchecSiIndisponible(response.status, chemin, maintenant);
+        circuitEchec(chemin, maintenant);
         const corps = await response.json().catch(() => null);
+        const metrique = getOrCreateMetrique(chemin);
+        majMetrique(metrique, Date.now(), false, 0);
+        purgerCircuits(Date.now());
         return { ok: false, statut: response.status, corps, disponible: true };
       }
       const corps = (await response.json().catch(() => null)) as T | null;
-      return { ok: true, valeur: corps as T };
+      circuitSucces(chemin);
+      if (cheminValide !== null) echeancesEchec.delete(cheminValide);
+      const metrique = getOrCreateMetrique(chemin);
+      majMetrique(metrique, Date.now(), true, 0);
+      purgerCircuits(Date.now());
+      return { ok: true, valeur: corps };
     } finally {
       clearTimeout(timeout);
     }
   } catch (error) {
     if (cheminValide !== null) armerEchec(cheminValide, Date.now());
+    circuitEchec(chemin, Date.now());
+    const metrique = getOrCreateMetrique(chemin);
+    majMetrique(metrique, Date.now(), false, 0);
+    purgerCircuits(Date.now());
     console.error("[mgs-agency] Plateforme momentanément indisponible.", error);
     return null;
   }
+}
+
+/** Vrai si les variables d'environnement du connecteur sont présentes. */
+export function connecteurAgenceConfigure(): boolean {
+  return Boolean(
+    process.env.MGS_PLATFORM_URL?.trim() &&
+      process.env.MGS_SITE_KEY?.trim() &&
+      process.env.MGS_SITE_SECRET?.trim(),
+  );
+}
+
+/**
+ * Retourne toutes les métriques de connexion, pour le diagnostic et
+ * l'affichage du statut de santé du connecteur.
+ */
+export function getMetriquesConnexion(): MetriqueConnexion[] {
+  return Array.from(metriques.values());
 }
 
 /* ========================================================================== *
