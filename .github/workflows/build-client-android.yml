@@ -32,7 +32,7 @@ jobs:
           packages: platform-tools
 
       - name: Install Android build packages
-        run: sdkmanager --channel=3 "platforms;android-37" "build-tools;37.0.0" "ndk;27.1.12297006"
+        run: sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0" "ndk;27.1.12297006"
 
       - name: Install mobile dependencies
         working-directory: templates/expo-generic/mobile
