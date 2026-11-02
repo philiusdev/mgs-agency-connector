@@ -34,6 +34,18 @@ test("un type inconnu revient au modèle vitrine et les noms sont bornés", () =
   assert.equal(normaliserNomSite("x".repeat(121)), "Votre marque");
 });
 
+test("les versions du connecteur et du modèle synchronisé restent alignées", async () => {
+  const [connecteur, modele, verrou] = await Promise.all([
+    readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
+    readFile(new URL("../templates/next-generic/package.json", import.meta.url), "utf8").then(JSON.parse),
+    readFile(new URL("../templates/next-generic/package-lock.json", import.meta.url), "utf8").then(JSON.parse),
+  ]);
+
+  assert.equal(connecteur.version, modele.version);
+  assert.equal(modele.version, verrou.version);
+  assert.equal(modele.version, verrou.packages?.[""]?.version);
+});
+
 test("le modèle générique embarque toujours les routes et composants du connecteur", async () => {
   const chemins = [
     "../templates/next-generic/app/api/agency/heartbeat/route.ts",
