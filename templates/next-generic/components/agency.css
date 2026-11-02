@@ -1,4 +1,4 @@
-/* Charte « Mon agence » de MindGraphixSolution — rouge de la vitrine sur noir.
+/* Charte « Mon agence » de MindGraphixSolution — charbon et orange de la vitrine.
  *
  * Bloc volontairement autonome : à copier dans le globals.css du site client.
  *
@@ -18,63 +18,40 @@
  *
  * LES COULEURS SONT CELLES DE LA VITRINE, PAS UNE CHARTE À PART.
  *
- * Elles viennent de `app/vitrine.css` : même noir, mêmes surfaces, même rouge
- * d'accent, mêmes famille de textes. L'ancien citron sur vert noir
- * (`#A8E62B` sur `#070D05`) venait d'une intention — distinguer d'un coup d'œil
- * ce qui vient de MGS de la boutique du commerçant — qui n'a plus de sens depuis
- * que la vitrine et le centre de contrôle portent la même identité : un outil qui
- * ne ressemble pas à la marque qu'il sert sert moins bien cette marque.
+ * Elles consomment les jetons globaux de la vitrine pour partager sa palette.
+ * Des valeurs de secours gardent un rendu cohérent si les jetons manquent.
  *
- * `--mgs-accent` et `--mgs-danger` sont proches par construction (5,50:1 et
- * 6,56:1), parce que la vitrine les déclare ainsi. Ce n'est pas un oubli mais un
- * choix fait là-bas, et le changer ici romprait la ressemblance. Les deux sont
- * donc distinguables par leur fond, jamais par leur teinte seule : tout ce qui
- * porte un statut d'état a aussi un libellé écrit, et une teinte de fond.
- *
- * Contrastes, mesurés sur les trois fonds (rapport WCAG, le plus bas en premier) :
- *
- *   --mgs-ink        #ffffff   15,7:1   sur #202329
- *   --mgs-ink-doux   #a0a8dc    6,8:1
- *   --mgs-muted      #8a92b8    5,2:1   — sous 7:1, donc réservé aux libellés
- *                                             secondaires, jamais à un prix ni à
- *                                             un statut
- *   --mgs-succes     #79d8a2    9,1:1
- *   --mgs-alerte     #e7b95a    8,6:1
- *   --mgs-danger     #ff6a62    5,6:1
- *
- * Le texte des boutons est `--mgs-noir` sur `--mgs-accent`, soit 5,50:1. Le
- * blanc sur le même rouge ne tiendrait que 3,34:1 : un bouton rouge à texte
- * blanc serait un échec, il est donc écrit sombre.
+ * Les jetons sont hérités de la vitrine quand elle est présente et peuvent être
+ * remplacés par un site client. Les couleurs de texte et d'état doivent donc
+ * toujours rester accompagnées d'un libellé ou d'un autre indice visuel ; leur
+ * contraste dépend du thème qui fournit les jetons.
  *
  * Les `@keyframes` sont nommés `agency-*` eux aussi, pour la même raison : un
  * nom de keyframe non préfixé peut écraser celui d'une animation du site client.
  */
 
 :root {
-  --mgs-noir: #131419;
-  --mgs-ink: #ffffff;
-  --mgs-ink-doux: #a0a8dc;
-  --mgs-muted: #8a92b8;
-  --mgs-accent: #ff4940;
-  --mgs-accent-vif: #ff6a62;
-  --mgs-accent-sombre: #c9372f;
-  --mgs-accent-soft: rgba(255, 73, 64, 0.09);
-  --mgs-surface: #191b21;
-  --mgs-surface-2: #202329;
-  --mgs-line: #2b2e3a;
-  --mgs-line-fort: #474b5e;
-  --mgs-succes: #79d8a2;
+  --mgs-noir: var(--noir, #14161c);
+  --mgs-ink: var(--texte, #ece4d6);
+  --mgs-ink-doux: var(--texte-doux, #a9a498);
+  --mgs-muted: var(--texte-discret, #a9a498);
+  --mgs-accent: var(--accent, #ff6b00);
+  --mgs-accent-vif: var(--accent-vif, #ff8a2a);
+  --mgs-accent-sombre: #e25600;
+  --mgs-accent-soft: var(--accent-doux, rgba(255, 107, 0, 0.14));
+  --mgs-surface: var(--surface, #1b1e26);
+  --mgs-surface-2: var(--surface-2, #232733);
+  --mgs-line: var(--bord, rgba(236, 228, 214, 0.14));
+  --mgs-line-fort: var(--bord-fort, rgba(236, 228, 214, 0.32));
+  --mgs-succes: var(--succes, #79d8a2);
   --mgs-alerte: #e7b95a;
-  --mgs-danger: #ff6a62;
-  --mgs-radius: 0px;
+  --mgs-danger: var(--danger, #ff786f);
+  --mgs-radius: var(--rayon, 8px);
   --mgs-limeur: none;
 
-  /* La pile de textes est celle de la vitrine (`--police-texte` dans
-     `app/vitrine.css`), écrite ici en dur : le tiroir ne doit hériter de la
-     typographie du site client que par accident. Un site client qui définit sa
-     propre pile sur `body` verrait sinon ses titres de police dans le panneau,
-     et un dashboard en serif display n'est pas un dashboard. */
-  --mgs-police: "Heebo", "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
+  /* La pile de textes suit celle de la vitrine, avec une pile de secours pour
+     les sites clients qui n'exposent pas le jeton global. */
+  --mgs-police: var(--police-sans, "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif);
 
   /* Le tiroir passe AU-DESSUS de tout, y compris d'un en-tête `sticky` de la
    * boutique à `z-index: 9999`. Un `z-index: 4000` suffirait pour un site
@@ -111,8 +88,8 @@
 }
 
 @keyframes agency-respiration {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 73, 64, 0.55); }
-  50% { box-shadow: 0 0 0 12px rgba(255, 73, 64, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 0, 0.55); }
+  50% { box-shadow: 0 0 0 12px rgba(255, 107, 0, 0); }
 }
 
 /* ---- 0. Utilitaires ------------------------------------------------------- */
@@ -198,7 +175,7 @@
  * clignotement, et le réglage système qui les coupe doit suffire. */
 .agency-bouton-flottant--marque {
   border-color: var(--mgs-accent-vif);
-  box-shadow: 0 0 0 2px rgba(255, 73, 64, 0.4), 0 12px 30px -12px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.4), 0 12px 30px -12px rgba(0, 0, 0, 0.95);
   animation: agency-respiration 2.6s ease-in-out infinite;
 }
 
@@ -533,10 +510,8 @@
 .agency-pastille--unpaid,
 .agency-pastille--impayee { border-color: rgba(255, 106, 98, 0.55); background: rgba(255, 106, 98, 0.13); color: var(--mgs-danger); }
 
-/* Prix : « Inclus » est vert, « Devis en attente » est neutre, un montant chiffré
- * est la couleur du texte. Un prix ne s'affiche JAMAIS en rouge : le rouge
- * appartient aux impayés, et l'utiliser pour un montant ferait croire à une
- * dette qui n'existe pas. */
+/* « Inclus » utilise le jeton de succès, « Devis en attente » reste neutre et
+ * un montant chiffré reprend l'accent. Le danger est réservé aux impayés. */
 .agency-prix {
   display: inline-block;
   padding: 3px 9px;
@@ -791,8 +766,8 @@
 .agency-card-pied { margin: 8px 0 0; color: var(--mgs-muted); font-size: 0.78rem; }
 
 /* Gravité : `severity` est un texte libre en base, ramené à trois valeurs par
- * `space.ts`. Le liséré porte l'information ET la couleur — le rouge seul
- * exclut les daltoniens de la distinction entre « alerte » et « critique ». */
+ * `space.ts`. Le liséré porte l'information avec une couleur ; la couleur seule
+ * ne distingue pas « alerte » de « critique ». */
 .agency-card-info { border-left: 4px solid var(--mgs-accent-sombre); }
 .agency-card-warning { border-left: 4px solid var(--mgs-alerte); }
 .agency-card-critical { border-left: 4px solid var(--mgs-danger); }
@@ -908,9 +883,8 @@
   text-underline-offset: 2px;
 }
 
-/* Le lien du résumé doit rester lisible sur fond rouge : sa couleur est
- * héritée, et `var(--mgs-danger)` seul sur `rgba(255, 106, 98, 0.12)` tomberait
- * sous 4.5:1. C'est le texte de la pastille qui porte le contraste, pas le trait. */
+/* Le lien du résumé hérite la couleur du texte pour rester lisible quelle que
+ * soit la couleur d'état portée par le panneau. */
 .agency-resume-lien:hover { color: var(--mgs-ink); }
 
 /* Le message d'un champ, sous le champ. La couleur d'alerte est un RENVOI à la
@@ -1076,10 +1050,8 @@
 
 /* ---- 14. Focus visible -------------------------------------------------------- */
 
-/* Un contour net sur fond quasi noir, visible même sur un fond vert : c'est
- * `--mgs-accent-vif` et non `--mgs-accent` qui porte le contraste. La règle est
- * `:focus-visible` et non `:focus` : le focus au pointeur ne doit pas laisser un
- * anneau sur un bouton déjà survolé. */
+/* Un contour net reprend l'accent vif. `:focus-visible` évite de laisser un
+ * anneau après un simple clic au pointeur. */
 .agency-flottant :focus-visible,
 .agency-tiroir :focus-visible,
 .agency-panneau :focus-visible {

@@ -3,7 +3,7 @@
 // La plateforme peut envoyer des webhooks vers `/api/agency/webhook` du site.
 // Ce module valide la signature HMAC et purge le cache de l'agence si nécessaire.
 
-import { verifierSignatureWebhook } from "@/lib/webhooks/signing"; // à adapter selon le chemin
+import { verifierSignatureWebhook } from "../webhooks/signing";
 import { purgerCacheAgence } from "./space";
 
 /**

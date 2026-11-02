@@ -252,6 +252,16 @@ export type AgencyBillingSubscription = {
  */
 export type SectionAgence = "catalogue" | "demandes" | "annonces" | "facturation";
 
+/** Type d'une action hors-ligne à synchroniser. */
+export type JobHorsLigne = {
+  id: string;
+  type: "creer_demande" | "envoyer_message" | "repondre_devis";
+  payload: Record<string, unknown>;
+  timestamp: number;
+  tentatives: number;
+  maxTentatives: number;
+};
+
 /* -------------------------------------------------------------------------- *
  * L'espace, tel que le site l'affiche.
  * -------------------------------------------------------------------------- */

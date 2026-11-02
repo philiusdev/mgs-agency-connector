@@ -6,6 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const template = join(root, "templates/next-generic");
 const copies = [
   ["lib/agency", "lib/agency"],
+  ["lib/webhooks", "lib/webhooks"],
   ["components/agency", "components/agency"],
   ["components/agency.css", "components/agency.css"],
   ["app/api/agency", "app/api/agency"],

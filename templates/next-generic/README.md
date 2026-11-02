@@ -27,6 +27,19 @@ d’hébergement. `MGS_SITE_SECRET` ne doit jamais être exposé avec le préfix
 Le déploiement automatique configure les valeurs partagées MGS/Supabase et les
 identifiants propres au site. Il ne publie pas le secret dans le dépôt.
 
+## Modèles de départ
+
+Le projet adapte sa page d’accueil au type transmis par la plateforme :
+boutique e-commerce, site vitrine ou plateforme personnalisée. Le nom public
+du site est affiché depuis `MGS_SITE_NAME`, et `MGS_SITE_TYPE` choisit le
+contenu de départ. Le modèle présente une structure à personnaliser ; il ne
+crée pas de catalogue, de paiement, de formulaire métier ni de connexion à des
+données inexistantes.
+
+Le type « application/mobile » n’est pas encore généré automatiquement. Le
+projet Next.js ne remplace pas un squelette Expo et ne doit pas être présenté
+comme une application native.
+
 ## Personnalisation
 
 Modifiez `app/page.tsx`, `app/site.css` et les métadonnées dans

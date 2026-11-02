@@ -4,7 +4,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { callAgency } from "@/lib/agency/client";
+import { callAgenceAvecDetail, connecteurAgenceConfigure } from "@/lib/agency/client";
 import { loadAgencySpace, purgerCacheAgence } from "@/lib/agency/space";
 import { MESSAGE_DEMANDE_ENVOYEE, type ReponseCreationDemande } from "@/lib/agency/contrat-partage";
 import {
@@ -29,16 +29,14 @@ import { autoriserAppel, cleAppel, entetesLimite } from "../_interne/limite";
  *
  *  - LE DEMANDEUR VIENT DE LA SESSION. `requester_email` est lu dans
  *    `user.email`, jamais dans le corps. Même connecté, un email venu du
- *    navigateur est IGNORÉ : la seule exception est l'absence totale de
- *    session, et cette porte-là est fermée par défaut
- *    (`MGS_AGENCY_REQUIRER_SESSION`), donc éteinte sur une boutique classique.
+ *    navigateur est ignoré. L'absence de session n'est autorisée que si le site
+ *    a explicitement configuré `MGS_AGENCY_REQUIRER_SESSION=0`.
  *  - LA VALIDATION EST LOCALE ET STRICTE. Le schéma est celui de la plateforme,
  *    nettoyage des caractères de contrôle et refus des balises compris : le
  *    commerçant ne paie jamais un aller-retour réseau pour un champ mal saisi,
  *    et un refus de la plateforme ne peut pas se déguiser en panne de service.
- *    C'est aussi pourquoi le téléphone est normalisé ici : `callAgency`
- *    transforme TOUT statut HTTP en `null`, donc un numéro rejeté par la
- *    plateforme reviendrait au commerçant en `503`.
+ *    C'est aussi pourquoi le téléphone est normalisé ici : les erreurs de
+ *    validation de la plateforme sont maintenant retransmises au formulaire.
  *  - LA RÉPONSE DE LA PLATEFORME EST REPRISE ENTIÈRE.
  *    `construireReponseCreationDemande` rend `{ demande, message }` : la
  *    demande déjà mise en forme par le CONTRAT partagé, et le message qui dit
@@ -180,6 +178,10 @@ export async function POST(request: Request) {
     telephone = normalise;
   }
 
+  if (!connecteurAgenceConfigure()) {
+    return repErreur("L’envoi des demandes n’est pas configuré sur le serveur. Contactez l’administration du site.", 503);
+  }
+
   /* 7. Limite d'appels, comptée AVANT d'aller sur le réseau : une rafale ne doit
    *    pas consommer le quota de la boutique sur les lectures de son tableau. */
   const decision = autoriserAppel(cleAppel(session, request));
@@ -205,7 +207,7 @@ export async function POST(request: Request) {
   };
   const [refusCatalogue, creation] = await Promise.all([
     verifierCatalogue(parse.data.service_id),
-    callAgency<ReponseCreationDemande>("/api/v1/agency/requests", {
+    callAgenceAvecDetail<ReponseCreationDemande>("/api/v1/agency/requests", {
       method: "POST",
       body: JSON.stringify(charge),
     }),
@@ -213,7 +215,7 @@ export async function POST(request: Request) {
 
   if (creation === null) {
     if (refusCatalogue) return repErreur(refusCatalogue.erreur, refusCatalogue.statut, ["service_id"]);
-    /* `callAgency` ne dit pas POURQUOI : plateforme muette, timeout, clé
+    /* La plateforme ne dit rien : timeout, clé
      * révoquée, `429` de la plateforme, `503` de la plateforme. Ces cas ont une
      * seule vérité pour le client : RIEN N'EST ENREGISTRÉ. On ne prétend donc
      * pas avoir créé une demande qu'on n'a pas vue créer, et on ne présente pas
@@ -226,9 +228,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const demande = creation.demande;
+  if (!creation.ok) {
+    if (refusCatalogue) return repErreur(refusCatalogue.erreur, refusCatalogue.statut, ["service_id"]);
+    const erreurPlateforme =
+      creation.corps && typeof creation.corps === "object" && !Array.isArray(creation.corps)
+        ? (creation.corps as { error?: unknown; champs?: unknown })
+        : null;
+    const message =
+      typeof erreurPlateforme?.error === "string" && erreurPlateforme.error.trim() !== ""
+        ? erreurPlateforme.error.trim().slice(0, 300)
+        : "La demande n’a pas été acceptée par l’agence. Vérifiez les informations ou réessayez.";
+    const champsPlateforme = Array.isArray(erreurPlateforme?.champs)
+      ? erreurPlateforme.champs.filter((champ): champ is string => typeof champ === "string")
+      : [];
+    return repErreur(message, creation.statut, champsPlateforme, entetesLimite(decision));
+  }
+
+  const corpsCreation = creation.valeur;
+  if (!corpsCreation || typeof corpsCreation !== "object" || Array.isArray(corpsCreation)) {
+    return repErreur("Réponse de l’agence illisible. Réessayez dans un instant.", 502);
+  }
+
+  const demande = corpsCreation.demande;
   if (typeof demande !== "object" || demande === null || Array.isArray(demande)) {
-    return repErreur("Réponse de l’agence illisible. Réessayez dans un instant.", 503);
+    return repErreur("Réponse de l’agence illisible. Réessayez dans un instant.", 502);
   }
 
   /* 9. La liste affichée vient de devenir fausse : on purge le cache de données,
@@ -242,7 +265,7 @@ export async function POST(request: Request) {
       demande,
       /* Un mot du contrat, jamais un mot d'ici : message absent, on rejoue le
        * message par défaut du contrat plutôt que d'en inventer un. */
-      message: typeof creation.message === "string" ? creation.message : MESSAGE_DEMANDE_ENVOYEE,
+      message: typeof corpsCreation.message === "string" ? corpsCreation.message : MESSAGE_DEMANDE_ENVOYEE,
     },
     { status: 201, headers: entetesLimite(decision) },
   );
@@ -251,9 +274,9 @@ export async function POST(request: Request) {
 /**
  * `MGS_AGENCY_REQUIRER_SESSION` : seul `0` rouvre le formulaire public.
  *
- * Le refus est appliqué par défaut, pas par confort. Une boutique n'a aucune
- * raison de laisser un visiteur anonyme écrire dans le dossier de ses clients,
- * et une variable qui rend ce refus optionnel doit se lire dans son nom.
+ * Le refus est appliqué par défaut. Un formulaire public doit être activé
+ * explicitement afin que l'identité fournie par le navigateur ne soit pas
+ * utilisée involontairement.
  */
 function sessionExigeSession(): boolean {
   const saisie = process.env.MGS_AGENCY_REQUIRER_SESSION?.trim().toLowerCase();

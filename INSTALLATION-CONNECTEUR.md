@@ -320,7 +320,7 @@ de production** (Vercel, Railway, votre hébergeur) :
 MGS_PLATFORM_URL=https://plateforme-votre-domaine
 MGS_SITE_KEY=mgs_xxxxxxxxxxxx
 MGS_SITE_SECRET=xxxxxxxxxxxxxxxx
-MGS_TEMPLATE_VERSION=1.0.0
+MGS_TEMPLATE_VERSION=1.1.0
 MGS_WEBSITE_URL=https://votre-site-agence
 MGS_AGENCY_NAME=MindGraphixSolution
 MGS_AGENCY_WHATSAPP=22670123456

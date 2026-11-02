@@ -107,13 +107,18 @@ export async function POST(
     return repErreur(erreur, resultat.statut);
   }
 
-  const messages = messagesDe({ messages: [resultat.valeur.message] });
+  const valeur = resultat.valeur;
+  if (!valeur || typeof valeur !== "object" || Array.isArray(valeur)) {
+    return repErreur("La plateforme a accepté le message, mais sa confirmation est illisible. Actualisez la conversation avant de réessayer.", 502);
+  }
+
+  const messages = messagesDe({ messages: [valeur.message] });
   if (!messages || messages.length !== 1) {
     return repErreur("La plateforme a accepté le message, mais sa confirmation est illisible. Actualisez la conversation avant de réessayer.", 502);
   }
 
   return NextResponse.json({
     message: messages[0],
-    suivi_indisponible: resultat.valeur.suivi_indisponible === true,
+    suivi_indisponible: valeur.suivi_indisponible === true,
   }, { status: 201, headers: { "Cache-Control": "no-store" } });
 }
