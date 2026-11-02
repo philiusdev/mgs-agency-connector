@@ -29,7 +29,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4.0.4
         with:
-          packages: platform-tools platforms;android-37 build-tools;37.0.0 ndk;27.1.12297006
+          packages: platform-tools
+
+      - name: Install Android build packages
+        run: sdkmanager --channel=3 "platforms;android-37" "build-tools;37.0.0" "ndk;27.1.12297006"
 
       - name: Install mobile dependencies
         working-directory: templates/expo-generic/mobile
