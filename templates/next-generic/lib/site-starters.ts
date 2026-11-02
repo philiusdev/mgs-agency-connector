@@ -67,19 +67,19 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
   },
   application: {
     libelle: "Application mobile",
-    accroche: "Application mobile · automatisation non disponible",
-    titre: "Le modèle mobile Expo n’est pas encore prêt.",
+    accroche: "Application Android Expo · modèle de départ",
+    titre: "Une base mobile prête à personnaliser.",
     description:
-      "La création automatique actuelle produit des sites Next.js. Elle ne crée pas de projet mobile natif et ne doit pas être présentée comme telle.",
-    sectionTitre: "Avant de démarrer une application",
+      "Le dépôt inclut une application Android Expo, une connexion client et une passerelle MGS côté serveur. Les écrans métier restent à adapter à votre client.",
+    sectionTitre: "Votre application de départ",
     sectionDescription:
-      "Un projet Expo doit protéger les secrets côté serveur et utiliser une passerelle adaptée.",
+      "Le site Vercel héberge la passerelle sécurisée ; le build Android installable est produit à la demande depuis GitHub Actions.",
     elements: [
-      { titre: "Projet Expo", description: "Le dépôt et les écrans React Native restent à mettre en place." },
-      { titre: "Passerelle sécurisée", description: "Les secrets du connecteur ne doivent jamais être embarqués dans l’application." },
-      { titre: "Publication mobile", description: "Les builds et les magasins d’applications ne sont pas configurés par ce flux." },
+      { titre: "Application Expo", description: "Connexion client, tableau de bord de départ et navigation Android sont inclus." },
+      { titre: "Connecteur MGS", description: "Les appels sont vérifiés côté serveur ; les clés du connecteur ne sont jamais dans l’APK." },
+      { titre: "APK Android", description: "Lancez le workflow manuel GitHub pour télécharger un APK de test installable." },
     ],
-    note: "Aucun dépôt mobile ni build d’application n’est créé automatiquement.",
+    note: "Le modèle ne publie pas l’application sur Play Store et ne remplace pas la personnalisation métier.",
   },
 };
 

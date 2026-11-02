@@ -19,12 +19,12 @@ test("le modèle boutique ne présente pas le panier ou le paiement comme déjà
   assert.match(modele.note, /Aucun produit ni paiement réel/);
 });
 
-test("le modèle mobile annonce clairement que l’automatisation n’existe pas", () => {
+test("le modèle mobile décrit le starter Expo et le build Android manuel", () => {
   const modele = chargerModeleSite("application");
 
-  assert.match(modele.accroche, /automatisation non disponible/);
-  assert.match(modele.description, /ne crée pas de projet mobile natif/);
-  assert.match(modele.note, /Aucun dépôt mobile ni build/);
+  assert.match(modele.accroche, /Android Expo/);
+  assert.match(modele.description, /passerelle MGS côté serveur/);
+  assert.match(modele.note, /ne publie pas l’application sur Play Store/);
 });
 
 test("un type inconnu revient au modèle vitrine et les noms sont bornés", () => {
@@ -60,4 +60,28 @@ test("le modèle générique embarque toujours les routes et composants du conne
     const contenu = await readFile(new URL(chemin, import.meta.url), "utf8");
     assert.ok(contenu.length > 0, `${chemin} doit être présent dans le modèle`);
   }
+});
+
+test("le mobile authentifie les administrateurs et ne livre jamais de clé MGS dans le bundle", async () => {
+  const [gateway, app, login, config, workflow] = await Promise.all([
+    readFile(new URL("../templates/next-generic/app/api/mobile/agency/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../templates/expo-generic/mobile/src/lib/supabase.ts", import.meta.url), "utf8"),
+    readFile(new URL("../templates/expo-generic/mobile/src/app/login.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../templates/next-generic/app/api/mobile/config/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/build-client-android.yml", import.meta.url), "utf8"),
+  ]);
+
+  const authCheck = gateway.indexOf("auth.getUser(token)");
+  const adminCheck = gateway.indexOf("administrateursAutorises().has(email)");
+  const platformCall = gateway.indexOf("await callAgency");
+  assert.ok(authCheck < adminCheck && adminCheck < platformCall);
+  assert.match(app, /expo-secure-store/);
+  assert.doesNotMatch(app, /MGS_SITE_(?:KEY|SECRET)/);
+  assert.match(login, /auth-email-start/);
+  assert.match(login, /verifyOtp/);
+  assert.match(config, /supabase_anon_key/);
+  assert.doesNotMatch(config, /MGS_SITE_(?:KEY|SECRET)/);
+  assert.match(workflow, /workflow_dispatch/);
+  assert.match(workflow, /assembleDebug/);
+  assert.match(workflow, /app-debug\.apk/);
 });

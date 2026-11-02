@@ -1,0 +1,56 @@
+name: Build client Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout client repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: templates/expo-generic/mobile/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install mobile dependencies
+        working-directory: templates/expo-generic/mobile
+        run: npm ci
+
+      - name: Configure this client app
+        shell: bash
+        run: |
+          REPOSITORY_NAME="${GITHUB_REPOSITORY##*/}"
+          echo "EXPO_PUBLIC_WEBSITE_URL=https://${REPOSITORY_NAME}.vercel.app" >> "$GITHUB_ENV"
+
+      - name: Generate the Android project
+        working-directory: templates/expo-generic/mobile
+        run: CI=1 npx expo prebuild --platform android
+
+      - name: Build an installable debug APK
+        working-directory: templates/expo-generic/mobile/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-android-apk
+          path: templates/expo-generic/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
