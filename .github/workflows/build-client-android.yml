@@ -11,23 +11,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout client repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: templates/expo-generic/mobile/package-lock.json
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4.0.4
+        with:
+          packages: platform-tools platforms;android-37 build-tools;37.0.0 ndk;27.1.12297006
 
       - name: Install mobile dependencies
         working-directory: templates/expo-generic/mobile
