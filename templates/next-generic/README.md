@@ -27,6 +27,15 @@ d’hébergement. `MGS_SITE_SECRET` ne doit jamais être exposé avec le préfix
 Le déploiement automatique configure les valeurs partagées MGS/Supabase et les
 identifiants propres au site. Il ne publie pas le secret dans le dépôt.
 
+## Santé et préparation métier
+
+`/api/health` vérifie sans exposer de secret que l’identité et le type du site
+sont configurés. Le centre de contrôle vérifie également la page d’accueil et
+la présence de ce contrat sur chaque site actif. Un modèle de départ peut être
+en ligne tout en restant incomplet : le catalogue, les paiements, les parcours
+de l’application et les autres fonctions métier doivent être configurés pour
+chaque client et ne sont pas déclarés opérationnels par cette sonde.
+
 ## Modèles de départ
 
 Le projet adapte sa page d’accueil au type transmis par la plateforme :

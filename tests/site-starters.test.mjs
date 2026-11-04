@@ -48,6 +48,7 @@ test("les versions du connecteur et du modèle synchronisé restent alignées", 
 
 test("le modèle générique embarque toujours les routes et composants du connecteur", async () => {
   const chemins = [
+    "../templates/next-generic/app/api/health/route.ts",
     "../templates/next-generic/app/api/agency/heartbeat/route.ts",
     "../templates/next-generic/app/api/agency/request/route.ts",
     "../templates/next-generic/app/admin/page.tsx",
@@ -60,6 +61,18 @@ test("le modèle générique embarque toujours les routes et composants du conne
     const contenu = await readFile(new URL(chemin, import.meta.url), "utf8");
     assert.ok(contenu.length > 0, `${chemin} doit être présent dans le modèle`);
   }
+});
+
+test("la sonde universelle est incluse dans le modèle généré", async () => {
+  const [script, sonde] = await Promise.all([
+    readFile(new URL("../scripts/sync-next-template.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../templates/next-generic/app/api/health/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.doesNotMatch(script, /\["app\/api\/health", "app\/api\/health"\]/);
+  assert.match(sonde, /service: "mgs-client-site"/);
+  assert.match(sonde, /business: "not_configured"/);
+  assert.doesNotMatch(sonde, /MGS_SITE_(?:KEY|SECRET)/);
 });
 
 test("le mobile authentifie les administrateurs et ne livre jamais de clé MGS dans le bundle", async () => {
