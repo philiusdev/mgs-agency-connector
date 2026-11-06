@@ -49,6 +49,12 @@ Le type « application/mobile » n’est pas encore généré automatiquement. L
 projet Next.js ne remplace pas un squelette Expo et ne doit pas être présenté
 comme une application native.
 
+La page d’accueil fournit une présentation responsive commune aux quatre types,
+avec un aperçu décoratif, les repères propres au modèle et une liste de contrôle
+pour préparer les contenus. Ces éléments restent éditoriaux : ils ne signalent
+pas qu’un panier, des formulaires métier, des données ou des intégrations sont
+déjà actifs. Le style partagé se trouve dans `app/site.css`.
+
 ## Personnalisation
 
 Modifiez `app/page.tsx`, `app/site.css` et les métadonnées dans

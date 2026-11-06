@@ -34,6 +34,25 @@ test("un type inconnu revient au modèle vitrine et les noms sont bornés", () =
   assert.equal(normaliserNomSite("x".repeat(121)), "Votre marque");
 });
 
+test("la page de départ affiche les sections partagées sans prétendre fournir des fonctions métier", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("../templates/next-generic/app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../templates/next-generic/app/site.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /modele\.libelle/);
+  assert.match(page, /modele\.elements\.map/);
+  assert.match(page, /id="offre"/);
+  assert.match(page, /id="etapes"/);
+  assert.match(page, /href="#contenu"/);
+  assert.match(page, /Les contenus affichés sont des repères/);
+  assert.match(page, /href="\/connexion"/);
+  assert.doesNotMatch(page, /form action|fetch\(|\/api\//);
+  assert.match(styles, /@media \(max-width: 680px\)/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(styles, /:focus-visible/);
+});
+
 test("les versions du connecteur et du modèle synchronisé restent alignées", async () => {
   const [connecteur, modele, verrou] = await Promise.all([
     readFile(new URL("../package.json", import.meta.url), "utf8").then(JSON.parse),
