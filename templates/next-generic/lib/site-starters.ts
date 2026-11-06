@@ -7,6 +7,7 @@ type ElementModele = {
 
 type ModeleSite = {
   theme: TypeSiteModele;
+  palette: { fond: string; accent: string; texte: string };
   libelle: string;
   accroche: string;
   titre: string;
@@ -20,6 +21,7 @@ type ModeleSite = {
 const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
   boutique: {
     theme: "boutique",
+    palette: { fond: "#f5ece4", accent: "#94583b", texte: "#633b2a" },
     libelle: "Boutique e-commerce",
     accroche: "Boutique en ligne · modèle de départ",
     titre: "Une boutique claire, prête pour vos produits.",
@@ -37,6 +39,7 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
   },
   vitrine: {
     theme: "vitrine",
+    palette: { fond: "#eff2eb", accent: "#356b55", texte: "#244b3b" },
     libelle: "Site vitrine",
     accroche: "Site vitrine · modèle de départ",
     titre: "Votre savoir-faire mérite une belle vitrine.",
@@ -54,6 +57,7 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
   },
   custom: {
     theme: "custom",
+    palette: { fond: "#eaf0f3", accent: "#42637a", texte: "#2b4659" },
     libelle: "Plateforme personnalisée",
     accroche: "Plateforme personnalisée · point de départ",
     titre: "Une base claire pour construire votre plateforme.",
@@ -71,6 +75,7 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
   },
   application: {
     theme: "application",
+    palette: { fond: "#efedf6", accent: "#60558a", texte: "#443b68" },
     libelle: "Application mobile",
     accroche: "Application Android Expo · modèle de départ",
     titre: "Une base mobile prête à personnaliser.",
