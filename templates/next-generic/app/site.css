@@ -8,6 +8,13 @@
   --site-accent-dark: #244b3b;
   --site-line: #e4e6df;
   --site-soft: #eff2eb;
+  --site-art-start: #e4e9dc;
+  --site-art-end: #b8cdbb;
+  --site-art-orbit: #fff9;
+  --site-art-sun: #f5e6bf;
+  --site-art-leaf: #315c49;
+  --site-art-leaf-light: #58765e;
+  --site-art-caption: #355344;
   --site-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   --site-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -19,6 +26,39 @@ a { color: inherit; }
 button, input { font: inherit; }
 ::selection { color: var(--site-ink); background: #dce8d9; }
 .site-shell { min-height: 100vh; overflow: hidden; }
+.site-shell[data-modele="boutique"] {
+  --site-accent: #94583b;
+  --site-accent-dark: #633b2a;
+  --site-soft: #f5ece4;
+  --site-art-start: #f2dfcf;
+  --site-art-end: #d7ad8a;
+  --site-art-sun: #f8e6ba;
+  --site-art-leaf: #865a43;
+  --site-art-leaf-light: #b77c57;
+  --site-art-caption: #65412e;
+}
+.site-shell[data-modele="custom"] {
+  --site-accent: #42637a;
+  --site-accent-dark: #2b4659;
+  --site-soft: #eaf0f3;
+  --site-art-start: #dce8ec;
+  --site-art-end: #a9c2ce;
+  --site-art-sun: #f4e3b4;
+  --site-art-leaf: #42637a;
+  --site-art-leaf-light: #6d8d9c;
+  --site-art-caption: #334f60;
+}
+.site-shell[data-modele="application"] {
+  --site-accent: #60558a;
+  --site-accent-dark: #443b68;
+  --site-soft: #efedf6;
+  --site-art-start: #e5e1f1;
+  --site-art-end: #bab4d5;
+  --site-art-sun: #f5e3bf;
+  --site-art-leaf: #60558a;
+  --site-art-leaf-light: #897fb0;
+  --site-art-caption: #4b426f;
+}
 .site-skip-link { position: fixed; z-index: 20; top: 12px; left: 12px; padding: 12px 16px; border-radius: 999px; background: var(--site-ink); color: white; transform: translateY(-160%); }
 .site-skip-link:focus { transform: translateY(0); }
 .site-header { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 24px; max-width: 1600px; margin: 0 auto; padding: 23px clamp(22px, 7vw, 108px); border-bottom: 1px solid #26332d12; }
@@ -50,14 +90,14 @@ button, input { font: inherit; }
 .site-preview-menu { display: grid; gap: 4px; width: 25px; }
 .site-preview-menu i { display: block; height: 1px; background: #758077; }
 .site-preview-menu i:last-child { width: 65%; justify-self: end; }
-.site-preview-art { position: relative; display: grid; min-height: 210px; overflow: hidden; place-items: center; border-radius: 15px; background: linear-gradient(135deg, #e4e9dc, #d6e0d1 58%, #b8cdbb); }
-.site-art-orbit { position: absolute; width: 230px; aspect-ratio: 1; border: 1px solid #fff9; border-radius: 50%; }
+.site-preview-art { position: relative; display: grid; min-height: 210px; overflow: hidden; place-items: center; border-radius: 15px; background: linear-gradient(135deg, var(--site-art-start), var(--site-art-end)); }
+.site-art-orbit { position: absolute; width: 230px; aspect-ratio: 1; border: 1px solid var(--site-art-orbit); border-radius: 50%; }
 .site-art-orbit--one { transform: scaleX(.72) rotate(-35deg); }
 .site-art-orbit--two { transform: scaleX(.72) rotate(35deg); }
-.site-art-sun { position: absolute; top: 29px; right: 48px; width: 70px; aspect-ratio: 1; border-radius: 50%; background: #f5e6bf; box-shadow: 0 0 45px #f5e6bf88; }
-.site-art-leaf { position: absolute; z-index: 1; bottom: -34px; left: calc(50% - 34px); width: 68px; height: 155px; border-radius: 100% 0 100% 0; background: linear-gradient(150deg, #678773, #315c49); transform: rotate(24deg); }
-.site-art-leaf--two { bottom: -47px; left: calc(50% + 13px); height: 132px; background: linear-gradient(150deg, #91a28a, #58765e); transform: rotate(66deg) scale(.8); }
-.site-art-caption { position: absolute; z-index: 2; top: 26px; left: 26px; color: #355344; font-family: var(--site-display); font-size: 1.3rem; line-height: 1.1; }
+.site-art-sun { position: absolute; top: 29px; right: 48px; width: 70px; aspect-ratio: 1; border-radius: 50%; background: var(--site-art-sun); box-shadow: 0 0 45px #f5e6bf88; }
+.site-art-leaf { position: absolute; z-index: 1; bottom: -34px; left: calc(50% - 34px); width: 68px; height: 155px; border-radius: 100% 0 100% 0; background: linear-gradient(150deg, var(--site-art-leaf-light), var(--site-art-leaf)); transform: rotate(24deg); }
+.site-art-leaf--two { bottom: -47px; left: calc(50% + 13px); height: 132px; background: linear-gradient(150deg, color-mix(in srgb, var(--site-art-leaf-light), white 22%), var(--site-art-leaf-light)); transform: rotate(66deg) scale(.8); }
+.site-art-caption { position: absolute; z-index: 2; top: 26px; left: 26px; color: var(--site-art-caption); font-family: var(--site-display); font-size: 1.3rem; line-height: 1.1; }
 .site-preview-content { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding: 21px 10px 7px; }
 .site-preview-label { color: var(--site-accent); font-size: .59rem; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
 .site-preview-content strong { max-width: 100%; overflow-wrap: anywhere; font-family: var(--site-display); font-size: 1.45rem; font-weight: 500; letter-spacing: -.04em; }

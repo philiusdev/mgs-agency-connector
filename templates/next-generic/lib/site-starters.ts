@@ -6,6 +6,7 @@ type ElementModele = {
 };
 
 type ModeleSite = {
+  theme: TypeSiteModele;
   libelle: string;
   accroche: string;
   titre: string;
@@ -18,6 +19,7 @@ type ModeleSite = {
 
 const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
   boutique: {
+    theme: "boutique",
     libelle: "Boutique e-commerce",
     accroche: "Boutique en ligne · modèle de départ",
     titre: "Une boutique claire, prête pour vos produits.",
@@ -34,6 +36,7 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
     note: "Aucun produit ni paiement réel n’est préconfiguré.",
   },
   vitrine: {
+    theme: "vitrine",
     libelle: "Site vitrine",
     accroche: "Site vitrine · modèle de départ",
     titre: "Votre savoir-faire mérite une belle vitrine.",
@@ -50,6 +53,7 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
     note: "Ajoutez vos coordonnées et vérifiez les formulaires avant publication.",
   },
   custom: {
+    theme: "custom",
     libelle: "Plateforme personnalisée",
     accroche: "Plateforme personnalisée · point de départ",
     titre: "Une base claire pour construire votre plateforme.",
@@ -66,6 +70,7 @@ const MODELES_SITE: Record<TypeSiteModele, ModeleSite> = {
     note: "Aucune donnée métier ni intégration externe n’est préconfigurée.",
   },
   application: {
+    theme: "application",
     libelle: "Application mobile",
     accroche: "Application Android Expo · modèle de départ",
     titre: "Une base mobile prête à personnaliser.",
