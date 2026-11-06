@@ -10,7 +10,7 @@ export default function HomePage() {
   const nomSite = normaliserNomSite(process.env.MGS_SITE_NAME);
 
   return (
-    <main className="site-shell">
+    <main className="site-shell" data-modele={modele.theme}>
       <a className="site-skip-link" href="#contenu">Aller au contenu</a>
       <header className="site-header">
         <Link href="/" className="site-brand" aria-label={`${nomSite}, accueil`}>

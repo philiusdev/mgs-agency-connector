@@ -9,6 +9,7 @@ test("les quatre types connus ont un modèle distinct et explicite", () => {
   const modeles = types.map((type) => chargerModeleSite(type));
 
   assert.equal(new Set(modeles.map((modele) => modele.libelle)).size, types.length);
+  assert.deepEqual(modeles.map((modele) => modele.theme), types);
   assert.ok(modeles.every((modele) => modele.elements.length === 3));
 });
 
@@ -41,6 +42,7 @@ test("la page de départ affiche les sections partagées sans prétendre fournir
   ]);
 
   assert.match(page, /modele\.libelle/);
+  assert.match(page, /data-modele=\{modele\.theme\}/);
   assert.match(page, /modele\.elements\.map/);
   assert.match(page, /id="offre"/);
   assert.match(page, /id="etapes"/);
@@ -51,6 +53,9 @@ test("la page de départ affiche les sections partagées sans prétendre fournir
   assert.match(styles, /@media \(max-width: 680px\)/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styles, /:focus-visible/);
+  assert.match(styles, /\.site-shell\[data-modele="boutique"\]/);
+  assert.match(styles, /\.site-shell\[data-modele="custom"\]/);
+  assert.match(styles, /\.site-shell\[data-modele="application"\]/);
 });
 
 test("les versions du connecteur et du modèle synchronisé restent alignées", async () => {
