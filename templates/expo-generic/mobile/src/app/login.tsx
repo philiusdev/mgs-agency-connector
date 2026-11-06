@@ -85,7 +85,7 @@ export default function LoginScreen() {
   }
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
+    return <View style={styles.center}><ActivityIndicator size="large" color="#ad542b" /></View>;
   }
 
   return (
@@ -149,15 +149,15 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: "center", padding: 26, gap: 14 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  eyebrow: { color: "#2563eb", fontSize: 12, fontWeight: "700", letterSpacing: 1.1 },
-  title: { color: "#142238", fontSize: 30, fontWeight: "800" },
-  subtitle: { color: "#53657d", fontSize: 15, lineHeight: 22, marginBottom: 8 },
-  input: { borderRadius: 12, backgroundColor: "#fff", borderWidth: 1, borderColor: "#d7e0ec", padding: 15, color: "#142238" },
+  eyebrow: { color: "#ad542b", fontSize: 12, fontWeight: "700", letterSpacing: 1.1 },
+  title: { color: "#302d2a", fontSize: 30, fontWeight: "800" },
+  subtitle: { color: "#68615b", fontSize: 15, lineHeight: 22, marginBottom: 8 },
+  input: { borderRadius: 12, backgroundColor: "#fffefa", borderWidth: 1, borderColor: "#ded9d1", padding: 15, color: "#302d2a" },
   error: { borderRadius: 12, backgroundColor: "#fff0f0", color: "#a83232", padding: 14 },
   notice: { borderRadius: 12, backgroundColor: "#eaf7ed", color: "#1d6631", padding: 14 },
-  button: { alignItems: "center", borderRadius: 12, backgroundColor: "#2563eb", padding: 15 },
+  button: { alignItems: "center", borderRadius: 12, backgroundColor: "#a84d24", padding: 15 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   linkButton: { alignItems: "center", padding: 12 },
-  linkText: { color: "#2563eb", fontSize: 14, fontWeight: "600" },
+  linkText: { color: "#a84d24", fontSize: 14, fontWeight: "600" },
 });

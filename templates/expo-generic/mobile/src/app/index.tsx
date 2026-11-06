@@ -73,7 +73,7 @@ export default function HomeScreen() {
   }
 
   if (loading || !session) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
+    return <View style={styles.center}><ActivityIndicator size="large" color="#ad542b" /></View>;
   }
 
   const agencyName = data?.agence?.identite?.nom || "Votre espace client";
@@ -133,20 +133,20 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, paddingTop: 64, gap: 18 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { gap: 8, marginBottom: 8 },
-  eyebrow: { color: "#2563eb", fontSize: 12, fontWeight: "700", letterSpacing: 1.1 },
-  title: { color: "#142238", fontSize: 28, fontWeight: "800" },
-  email: { color: "#53657d", fontSize: 14 },
+  eyebrow: { color: "#ad542b", fontSize: 12, fontWeight: "700", letterSpacing: 1.1 },
+  title: { color: "#302d2a", fontSize: 28, fontWeight: "800" },
+  email: { color: "#68615b", fontSize: 14 },
   grid: { flexDirection: "row", gap: 10 },
   stat: { flex: 1, borderRadius: 16, backgroundColor: "#fff", padding: 16, gap: 7 },
-  statValue: { color: "#142238", fontSize: 23, fontWeight: "800" },
-  statLabel: { color: "#53657d", fontSize: 12 },
+  statValue: { color: "#302d2a", fontSize: 23, fontWeight: "800" },
+  statLabel: { color: "#68615b", fontSize: 12 },
   card: { borderRadius: 16, backgroundColor: "#fff", padding: 18, gap: 8 },
-  cardTitle: { color: "#142238", fontSize: 16, fontWeight: "700" },
-  cardText: { color: "#53657d", fontSize: 14, lineHeight: 21 },
+  cardTitle: { color: "#302d2a", fontSize: 16, fontWeight: "700" },
+  cardText: { color: "#68615b", fontSize: 14, lineHeight: 21 },
   error: { borderRadius: 12, backgroundColor: "#fff0f0", color: "#a83232", padding: 14 },
-  button: { alignItems: "center", borderRadius: 12, backgroundColor: "#2563eb", padding: 15 },
+  button: { alignItems: "center", borderRadius: 12, backgroundColor: "#a84d24", padding: 15 },
   buttonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  secondaryButton: { alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#d7e0ec", padding: 15 },
-  secondaryButtonText: { color: "#253955", fontSize: 15, fontWeight: "600" },
-  footer: { color: "#738198", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 4 },
+  secondaryButton: { alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#ded9d1", padding: 15 },
+  secondaryButtonText: { color: "#514b45", fontSize: 15, fontWeight: "600" },
+  footer: { color: "#777068", fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 4 },
 });

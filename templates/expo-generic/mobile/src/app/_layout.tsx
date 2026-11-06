@@ -37,7 +37,7 @@ export default function RootLayout() {
   if (!config) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#ad542b" />
         <Text style={styles.message}>Connexion au site…</Text>
       </View>
     );
@@ -51,13 +51,13 @@ export default function RootLayout() {
       siteId={config.siteId}
     >
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#f4f7fb" } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#f2f0eb" } }} />
     </AuthProvider>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 28, gap: 12 },
-  title: { color: "#142238", fontSize: 22, fontWeight: "700" },
-  message: { color: "#53657d", fontSize: 15, textAlign: "center" },
+  title: { color: "#302d2a", fontSize: 22, fontWeight: "700" },
+  message: { color: "#68615b", fontSize: 15, textAlign: "center" },
 });
