@@ -10,6 +10,7 @@ test("les quatre types connus ont un modèle distinct et explicite", () => {
 
   assert.equal(new Set(modeles.map((modele) => modele.libelle)).size, types.length);
   assert.deepEqual(modeles.map((modele) => modele.theme), types);
+  assert.ok(modeles.every((modele) => /^#[0-9a-f]{6}$/i.test(modele.palette.accent)));
   assert.ok(modeles.every((modele) => modele.elements.length === 3));
 });
 
@@ -56,6 +57,22 @@ test("la page de départ affiche les sections partagées sans prétendre fournir
   assert.match(styles, /\.site-shell\[data-modele="boutique"\]/);
   assert.match(styles, /\.site-shell\[data-modele="custom"\]/);
   assert.match(styles, /\.site-shell\[data-modele="application"\]/);
+});
+
+test("les aperçus Open Graph utilisent le nom, le type et une URL canonique HTTPS validée", async () => {
+  const [layout, image] = await Promise.all([
+    readFile(new URL("../templates/next-generic/app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../templates/next-generic/app/opengraph-image.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(layout, /lireUrlSite\(process\.env\.MGS_WEBSITE_URL\)/);
+  assert.match(layout, /url\.protocol !== "https:"/);
+  assert.match(layout, /alternates: \{ canonical: "\/" \}/);
+  assert.match(layout, /card: "summary_large_image"/);
+  assert.match(layout, /url: "\/opengraph-image"/);
+  assert.match(image, /new ImageResponse/);
+  assert.match(image, /modele\.palette/);
+  assert.match(image, /normaliserNomSite\(process\.env\.MGS_SITE_NAME\)/);
 });
 
 test("les versions du connecteur et du modèle synchronisé restent alignées", async () => {
