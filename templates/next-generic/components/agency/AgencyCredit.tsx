@@ -31,20 +31,20 @@ import { chargerIdentiteAgence } from "@/lib/agency/space";
  *    vaut `null` et le nom reste écrit en clair. Un pied de page vide serait
  *    une régression visible ; un lien vers « about:blank » serait un lien
  *    cassé, ce qui est pire.
- *  - AUCUNE URL ÉCRITE EN DUR. L'adresse vient de la plateforme, ou de
- *    `MGS_WEBSITE_URL` en repli : c'est un réglage, pas une constante, et le
- *    lire ici permet de changer de domaine sans redéployer le site client.
- *    `formaterSiteWeb` refuse au passage tout schéma autre que `http`/`https`,
- *    donc cette ancre ne peut pas devenir un `javascript:`.
+ *  - AUCUNE URL ÉCRITE EN DUR, ET AUCUN ANCIEN DOMAINE EN REPLI. L'adresse
+ *    vient uniquement de la plateforme. Si elle est indisponible, le nom reste
+ *    visible sans lien plutôt que d'envoyer un client vers une URL périmée.
+ *    `formaterSiteWeb` refuse tout schéma autre que `http`/`https`, donc cette
+ *    ancre ne peut pas devenir un `javascript:`.
  *  - UN SEUL LIEN SORTANT, et il est marqué. `rel="noopener noreferrer
  *    nofollow"` ferme l'accès à `window.opener` — sans quoi la vitrine de
  *    l'agence pourrait piloter l'onglet du site client — et dit aux moteurs de
  *    recherche que le crédit n'est pas un vote. Le crédit est un remerciement,
  *    pas une optimisation.
  *
- * Le composant ne lève jamais : `chargerIdentiteAgence()` replie sur
- * l'environnement si la plateforme est muette, et un pied de page qui planterait
- * à cause d'un crédit ferait tomber toute la page d'accueil.
+ * Le composant ne lève jamais : si la plateforme est muette, le nom de repli
+ * reste affiché sans adresse, et un pied de page qui planterait à cause d'un
+ * crédit ferait tomber toute la page d'accueil.
  */
 
 export async function AgencyCredit() {

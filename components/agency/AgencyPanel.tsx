@@ -31,6 +31,7 @@ import type {
   AgencyBilling,
   AgencyInvoice,
   AgencyBillingSubscription,
+  AgencyPublicSpace,
   IdentiteAgence,
   OffreAffiche,
   PrestationAffiche,
@@ -73,9 +74,7 @@ import type { AgencySpace } from "@/lib/agency/types";
  * `AgencyFloatingButton`.
  */
 
-export type AgencyPanelProps = {
-  /** Espace chargé côté serveur. `null` → rien ne s'affiche, c'est voulu. */
-  space: AgencySpace | null;
+type AgencyPanelOptions = {
   /** Nom pré-rempli du demandeur dans le formulaire. */
   requesterName?: string;
   /** Email pré-rempli du demandeur dans le formulaire. */
@@ -90,15 +89,20 @@ export type AgencyPanelProps = {
   routeReponse?: string | null;
 };
 
-export function AgencyPanel({
-  space,
-  requesterName,
-  requesterEmail,
-  routeDemande,
-  routeRevalidation,
-  cheminRevalidation,
-  routeReponse,
-}: AgencyPanelProps) {
+export type AgencyPanelProps = AgencyPanelOptions & (
+  | { mode: "public"; space: AgencyPublicSpace | null }
+  | { mode?: "admin"; space: AgencySpace | null }
+);
+
+export function AgencyPanel(props: AgencyPanelProps) {
+  const {
+    requesterName,
+    requesterEmail,
+    routeDemande,
+    routeRevalidation,
+    cheminRevalidation,
+    routeReponse,
+  } = props;
   // Préfixe d'identifiant, calculé UNE FOIS par panneau et redescendu aux
   // sections. Il n'est pas calculé par section : deux appels à `useId()` rendus dans
   // deux composants frères ne partagent pas la même valeur, donc chaque titre
@@ -122,8 +126,33 @@ export function AgencyPanel({
   // La garde d'or. Elle est aussi placée sur chaque section, parce qu'un objet
   // normalisé par le réseau peut porter une liste `undefined` : deux lignes, pas
   // une, et la page du dashboard ne tombe jamais.
-  if (!space) return null;
+  if (!props.space) return null;
 
+  if (props.mode === "public") {
+    const space = props.space;
+    return (
+      <div className="agency-panneau">
+        <SectionIdentite identite={space.identite} joignable={space.joignable} suffixe={suffixe} />
+        <SectionPrestations
+          prestations={space.prestations}
+          indisponible={space.indisponibles.includes("catalogue")}
+          suffixe={suffixe}
+        />
+        <SectionOffres offres={space.offres} suffixe={suffixe} />
+        <FormulaireNouvelleDemande
+          prestations={space.prestations}
+          requesterName={requesterName}
+          requesterEmail={requesterEmail}
+          routeDemande={routeDemande}
+          routeRevalidation={routeRevalidation}
+          cheminRevalidation={cheminRevalidation}
+          suffixe={suffixe}
+        />
+      </div>
+    );
+  }
+
+  const space = props.space;
   const identite = space.identite ?? null;
 
   // Une section que la plateforme n'a pas pu servir ne doit pas laisser croire

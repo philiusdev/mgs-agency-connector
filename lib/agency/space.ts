@@ -42,6 +42,7 @@ import type {
   AgencyBilling,
   AgencyBillingPlan,
   AgencyBillingSubscription,
+  AgencyPublicSpace,
   AgencyInvoice,
   AgencySpace,
   BoutonFlottantAffiche,
@@ -650,20 +651,20 @@ export function agencyWebsiteUrl(): string | null {
  * demanderait à la plateforme le nom de l'agence, et la limite de soixante
  * requêtes par minute serait atteinte en quelques minutes de navigation.
  *
- * LA PLATEFORME FAIT FOI, L'ENVIRONNEMENT REPLIE. Dès que la plateforme a
- * répondu, c'est elle qui décide du nom affiché : l'agence peut corriger son
- * nom depuis la console sans redéployer le site. Quand elle est muette, la
- * fonction retombe sur `MGS_AGENCY_NAME` et `MGS_WEBSITE_URL` — deux réglages
- * propres au site, lus côté serveur, jamais exposés au navigateur.
+ * LA PLATEFORME FAIT FOI. Dès qu'elle répond avec une identité, son site web
+ * décide du lien affiché : l'agence peut le corriger depuis la console sans
+ * redéployer le site. Si elle ne répond pas, le nom de repli reste affiché mais
+ * sans lien : un ancien `MGS_WEBSITE_URL` ne doit pas envoyer les visiteurs
+ * vers un domaine retiré.
  *
- * UN LIEN PERDU EST PIRE QU'UN LIEN ANCIEN. Si la plateforme répond sans
- * adresse — identité enregistrée mais site vide — l'adresse de l'environnement
- * reprend la place. Le pied de page affiche alors un nom qui n'est plus cliquable
- * alors qu'il l'était la veille : c'est une régression visible par le public,
- * et le texte seul ne dit pas à l'agence que son site n'est plus référencé.
+ * UNE ADRESSE EFFACÉE RESTE EFFACÉE. Quand la plateforme renvoie l'identité,
+ * son `site_web` fait foi, y compris s'il vaut `null` : un ancien
+ * `MGS_WEBSITE_URL` ne doit pas faire réapparaître un lien que l'agence vient
+ * d'effacer. L'environnement ne sert de repli que si la plateforme ne fournit
+ * pas d'identité exploitable.
  *
- * La fonction ne lève jamais : `callAgency` renvoie `null` au moindre échec, et
- * l'identité de repli est toujours complète.
+ * La fonction ne lève jamais : `callAgency` renvoie `null` au moindre échec ;
+ * l'identité de repli conserve le nom, sans inventer d'adresse.
  */
 export async function chargerIdentiteAgence(): Promise<IdentiteAgence> {
   const brut = await callAgency<ReponseEspaceAgenceBrut>("/api/v1/agency");
@@ -672,11 +673,28 @@ export async function chargerIdentiteAgence(): Promise<IdentiteAgence> {
   // `agence.identite` fait foi ; le `identite` de premier niveau n'existe que
   // pour une plateforme plus ancienne, et ne l'emporte jamais.
   const identiteBrut = agence?.identite ?? plateforme?.identite ?? null;
-  // Le filet de repli s'applique quand la plateforme n'a pas répondu du tout :
-  // une plateforme qui répond, même sans adresse, reste la source de vérité.
   const identite = normaliserIdentite(identiteBrut, plateforme === null);
-  if (identite.site_web) return identite;
-  return { ...identite, site_web: agencyWebsiteUrl() };
+  if (identiteBrut !== null) return identite;
+  return { ...identite, site_web: null };
+}
+
+/** Données publiques minimales du bouton flottant, sans suivi ni facturation. */
+export async function loadPublicAgencySpace(): Promise<AgencyPublicSpace | null> {
+  const brut = await callAgency<ReponseEspaceAgenceBrut>("/api/v1/agency");
+  const plateforme = commeObjet(brut);
+  const agence = commeObjet(plateforme?.agence);
+  const identiteBrute = agence?.identite ?? plateforme?.identite ?? null;
+  const identite = normaliserIdentite(identiteBrute, plateforme === null);
+
+  if (plateforme === null && !filetConfigure()) return null;
+
+  return {
+    identite,
+    prestations: normaliserPrestations(plateforme?.prestations),
+    offres: normaliserOffres(plateforme?.offres, identite.whatsapp),
+    joignable: plateforme !== null,
+    indisponibles: plateforme === null ? ["catalogue"] : [],
+  };
 }
 
 /**

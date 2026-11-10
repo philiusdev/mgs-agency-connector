@@ -425,6 +425,8 @@ export type LigneOffre = {
 export type LigneService = {
   id: string;
   tenant_id: string | null;
+  /** Nom résolu pour les écrans d’administration ; absent des lignes métier. */
+  espace_nom?: string | null;
   code: string;
   title: string;
   description: string | null;
@@ -1817,9 +1819,10 @@ export function presenterAbonnement(
     fin !== null && fin.getTime() > maintenantDate.getTime()
       ? Math.ceil((fin.getTime() - maintenantDate.getTime()) / 86400000)
       : null;
+  const actif = estAbonnementActif(abonnement, maintenantDate);
 
   return {
-    actif: estAbonnementActif(abonnement, maintenantDate),
+    actif,
     statut: abonnement === undefined || abonnement === null
       ? "aucun"
       : estCodeAbonnement(code)
@@ -1839,7 +1842,7 @@ export function presenterAbonnement(
     periode_libelle: formaterPeriode(debut, fin),
     fin_libelle: formaterDate(fin),
     jours_restants: joursRestants,
-    se_renouvelle: abonnement?.cancel_at_period_end !== true,
+    se_renouvelle: actif && abonnement?.cancel_at_period_end !== true,
     resilie: code === "canceled" || abonnement?.canceled_at != null,
   };
 }
