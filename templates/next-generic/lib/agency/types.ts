@@ -298,3 +298,11 @@ export type AgencySpace = {
   /** Sections que la plateforme n'a pas pu servir. Liste vide = tout est connu. */
   indisponibles: SectionAgence[];
 };
+
+/** Données strictement publiques nécessaires au panneau de contact du site. */
+export type AgencyPublicSpace = Pick<
+  AgencySpace,
+  "identite" | "prestations" | "offres" | "joignable"
+> & {
+  indisponibles: ("catalogue")[];
+};

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AgencyPanel } from "./AgencyPanel";
 import { composerLibelleAccessibleBouton } from "./agency-commun";
-import type { AgencySpace } from "@/lib/agency/types";
+import type { AgencyPublicSpace, AgencySpace } from "@/lib/agency/types";
 
 /**
  * Le bouton flottant de l'agence, et le panneau qu'il ouvre.
@@ -67,9 +67,7 @@ import type { AgencySpace } from "@/lib/agency/types";
  * Unicode.
  */
 
-export type AgencyFloatingButtonProps = {
-  /** Espace chargé côté serveur. `null` → aucun bouton, c'est la règle du dépôt. */
-  space: AgencySpace | null;
+type AgencyFloatingButtonOptions = {
   /** Nom pré-rempli du demandeur dans le formulaire. */
   requesterName?: string;
   /** Email pré-rempli du demandeur dans le formulaire. */
@@ -84,19 +82,25 @@ export type AgencyFloatingButtonProps = {
   libelleBouton?: string;
 };
 
+export type AgencyFloatingButtonProps = AgencyFloatingButtonOptions & (
+  | { mode: "public"; space: AgencyPublicSpace | null }
+  | { mode?: "admin"; space: AgencySpace | null }
+);
+
 /** Cible de la touche Tab, dans l'ordre du document. */
 const SELECTEUR_FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function AgencyFloatingButton({
-  space,
-  requesterName,
-  requesterEmail,
-  routeDemande,
-  routeRevalidation,
-  cheminRevalidation,
-  libelleBouton,
-}: AgencyFloatingButtonProps) {
+export function AgencyFloatingButton(props: AgencyFloatingButtonProps) {
+  const {
+    space,
+    requesterName,
+    requesterEmail,
+    routeDemande,
+    routeRevalidation,
+    cheminRevalidation,
+    libelleBouton,
+  } = props;
   const [ouvert, setOuvert] = useState(false);
   const [bulleFermee, setBulleFermee] = useState(false);
   const boutonRef = useRef<HTMLButtonElement | null>(null);
@@ -230,6 +234,7 @@ export function AgencyFloatingButton({
         ref={boutonRef}
         type="button"
         className={`agency-bouton-flottant${marque ? " agency-bouton-flottant--marque" : ""}`}
+        data-agency-floating-button="true"
         aria-expanded={ouvert}
         aria-controls={identifiantPanneau}
         aria-label={composerLibelleAccessibleBouton(texteBouton, bouton.libelle_accessible)}
@@ -272,14 +277,26 @@ export function AgencyFloatingButton({
             </header>
 
             <div className="agency-tiroir-corps">
-              <AgencyPanel
-                space={space}
-                requesterName={requesterName}
-                requesterEmail={requesterEmail}
-                routeDemande={routeDemande}
-                routeRevalidation={routeRevalidation}
-                cheminRevalidation={cheminRevalidation}
-              />
+              {props.mode === "public" ? (
+                <AgencyPanel
+                  mode="public"
+                  space={props.space}
+                  requesterName={requesterName}
+                  requesterEmail={requesterEmail}
+                  routeDemande={routeDemande}
+                  routeRevalidation={routeRevalidation}
+                  cheminRevalidation={cheminRevalidation}
+                />
+              ) : (
+                <AgencyPanel
+                  space={props.space}
+                  requesterName={requesterName}
+                  requesterEmail={requesterEmail}
+                  routeDemande={routeDemande}
+                  routeRevalidation={routeRevalidation}
+                  cheminRevalidation={cheminRevalidation}
+                />
+              )}
             </div>
           </div>
         </>
