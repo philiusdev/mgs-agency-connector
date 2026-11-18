@@ -916,14 +916,48 @@
   margin-top: 14px;
 }
 
+/* La conversation s'ouvre en grande surface assise au centre de l'écran, comme
+ * dans la console de l'agence — plus un panneau collé au bord. L'overlay couvre
+ * toute la fenêtre, le dialogue fait 860 px maximum et se referme au clic
+ * dehors, sur Échap, ou sur la croix ; à la fermeture le focus revient au
+ * bouton qui l'a ouvert. Le z-index se pose AU-DESSUS du tiroir flottant
+ * (`--mgs-z-tiroir`) : la conversation peut s'ouvrir par-dessus le panneau. */
+.agency-messages-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--mgs-z-tiroir) + 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--mgs-voile);
+  animation: agency-apparition 180ms ease both;
+}
+
+@supports (backdrop-filter: blur(3px)) {
+  .agency-messages-overlay { backdrop-filter: blur(3px); }
+}
+
 .agency-messages-contenu {
   display: grid;
   gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--mgs-line);
+  align-content: start;
+  width: min(100%, 860px);
+  min-height: 380px;
+  max-height: min(92dvh, 900px);
+  padding: 18px;
+  border: 1px solid var(--mgs-line-fort);
   border-radius: var(--mgs-radius);
-  background: var(--mgs-surface-2);
+  background: var(--mgs-surface);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.75);
+  animation: agency-apparition-montre 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* Le dialogue a `tabIndex={-1}` pour recevoir le focus à l'ouverture ; le
+ * contour de focus ne doit alors pas s'afficher autour du panneau entier. */
+.agency-messages-contenu:focus { outline: none; }
 
 .agency-messages-titre {
   margin: 0;
@@ -1054,7 +1088,8 @@
  * anneau après un simple clic au pointeur. */
 .agency-flottant :focus-visible,
 .agency-tiroir :focus-visible,
-.agency-panneau :focus-visible {
+.agency-panneau :focus-visible,
+.agency-messages-contenu :focus-visible {
   outline: 3px solid var(--mgs-accent-vif);
   outline-offset: 2px;
   border-radius: 6px;
@@ -1111,6 +1146,17 @@
   }
 
   .agency-tiroir-corps { padding: 14px; }
+  /* Le dialogue occupe tout l'écran : un overlay centré avec des marges sur un
+   * téléphone de 320 px rognerait le formulaire sans rien gagner. */
+  .agency-messages-overlay { padding: 0; }
+  .agency-messages-contenu {
+    width: 100%;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
   .agency-section { padding: 16px; }
   .agency-bouton-flottant { min-height: 48px; padding: 0 16px; font-size: 0.9rem; }
   .agency-banner-action { margin-left: 0; }
@@ -1129,7 +1175,9 @@
   .agency-bulle,
   .agency-tiroir,
   .agency-tiroir--droite,
-  .agency-tiroir--gauche {
+  .agency-tiroir--gauche,
+  .agency-messages-overlay,
+  .agency-messages-contenu {
     animation: none;
   }
 
